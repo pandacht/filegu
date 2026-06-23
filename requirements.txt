@@ -1,0 +1,4 @@
+# Core app - no dependencies (pure Python stdlib)
+# Optional - install for enhanced virus scanning:
+yara-python   # YARA rule-based detection (highly recommended)
+# pefile      # Deep PE header analysis (optional, future extension)

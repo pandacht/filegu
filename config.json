@@ -1,0 +1,20 @@
+{
+  "scanner": {
+    "threads": 8,
+    "depth": "full",
+    "skip_media": true,
+    "exe_only": false,
+    "extra_skip_ext": [],
+    "extra_skip_dirs": ["SteamLibrary", "Ubisoft Game Launcher", "BattlEye", "EasyAntiCheat"]
+  },
+  "search": {
+    "default_mode": "keyword",
+    "default_type": "both",
+    "all_drives": true
+  },
+  "ui": {
+    "default_tab": "Search",
+    "window_width": 980,
+    "window_height": 720
+  }
+}
