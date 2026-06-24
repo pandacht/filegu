@@ -14,6 +14,8 @@ from utils.constants import (
     SUCCESS, WARNING, DANGER, DEFAULT_SKIP,
 )
 from utils import config as cfg
+from utils.lang import t
+from utils.virustotal import vt_lookup_hash, vt_parse_result
 from scanner.engine  import scan_file
 from scanner.hash_db import db_info, update_database
 from scanner         import yara_engine
@@ -32,10 +34,11 @@ class VirusTab(tk.Frame):
         self._pending_results = []
         self._pending_lock    = threading.Lock()
         self._result_counts   = {"clean": tk.IntVar(value=0)}
-        self._clean_count_var = tk.StringVar(value="🟢 Clean: 0")
+        self._clean_count_var = tk.StringVar(value=t("virus.clean_count", n=0))
         self._scan_done_flag  = False
         self._scan_done_total = 0
         self._scan_total      = [0]
+        self._vt_key_var      = tk.StringVar()
 
         self._build(self)
         self._refresh_db_info()
@@ -54,7 +57,7 @@ class VirusTab(tk.Frame):
         tk.Label(info_bar, textvariable=self._yara_var,
                  font=("Segoe UI", 10), bg=SURFACE2, fg=MUTED).pack(side="left", padx=(0, 16))
 
-        tk.Button(info_bar, text="⬇  Update Hash DB",
+        tk.Button(info_bar, text=t("virus.btn_update_db"),
                   command=self._update_db,
                   font=("Segoe UI", 10), bg=SURFACE, fg=TEXT,
                   relief="flat", bd=0, padx=12, pady=6, cursor="hand2"
@@ -76,7 +79,7 @@ class VirusTab(tk.Frame):
         self._build_right_panel(right)
 
     def _build_drive_panel(self, parent):
-        tk.Label(parent, text="SCAN IN", font=("Segoe UI", 9, "bold"),
+        tk.Label(parent, text=t("virus.scan_in"), font=("Segoe UI", 9, "bold"),
                  bg=SURFACE, fg=MUTED).pack(anchor="w", padx=16, pady=(16, 4))
 
         dsf = tk.Frame(parent, bg=SURFACE)
@@ -84,7 +87,7 @@ class VirusTab(tk.Frame):
 
         # All drives checkbox
         self._all_drives_var = tk.BooleanVar(value=True)
-        self._all_drives_cb = tk.Checkbutton(dsf, text="All drives",
+        self._all_drives_cb = tk.Checkbutton(dsf, text=t("virus.all_drives"),
                        variable=self._all_drives_var,
                        command=self._toggle_all_drives,
                        font=("Segoe UI", 11, "bold"), bg=SURFACE, fg=ACCENT2,
@@ -109,7 +112,7 @@ class VirusTab(tk.Frame):
         tk.Frame(parent, bg=SURFACE2, height=1).pack(fill="x", padx=16, pady=(12, 8))
 
         # Single file browse
-        tk.Label(parent, text="OR SINGLE FILE", font=("Segoe UI", 9, "bold"),
+        tk.Label(parent, text=t("virus.single_file"), font=("Segoe UI", 9, "bold"),
                  bg=SURFACE, fg=MUTED).pack(anchor="w", padx=16, pady=(0, 4))
 
         self._file_var = tk.StringVar()
@@ -120,7 +123,7 @@ class VirusTab(tk.Frame):
                  insertbackground=ACCENT, relief="flat", bd=6)
         self._file_entry.pack(fill="x")
 
-        self._browse_btn = tk.Button(parent, text="Browse file…", command=self._browse_file,
+        self._browse_btn = tk.Button(parent, text=t("virus.btn_browse"), command=self._browse_file,
                   font=("Segoe UI", 10), bg=SURFACE2, fg=TEXT,
                   relief="flat", bd=0, padx=10, pady=6, cursor="hand2")
         self._browse_btn.pack(fill="x", padx=16, pady=(6, 0))
@@ -131,7 +134,7 @@ class VirusTab(tk.Frame):
         # Spacer + scan button
         tk.Frame(parent, bg=SURFACE).pack(fill="y", expand=True)
 
-        self._scan_btn = tk.Button(parent, text="▶  Start Scan",
+        self._scan_btn = tk.Button(parent, text=t("virus.btn_start"),
                                    command=self._start_scan,
                                    font=("Segoe UI", 13, "bold"), bg=ACCENT, fg="white",
                                    relief="flat", bd=0, pady=12, cursor="hand2",
@@ -142,7 +145,7 @@ class VirusTab(tk.Frame):
         # Progress
         prog_frame = tk.Frame(parent, bg=BG)
         prog_frame.pack(fill="x", pady=(0, 4))
-        self._status_var = tk.StringVar(value="Select drives or a file, then press Start Scan.")
+        self._status_var = tk.StringVar(value=t("virus.status_ready"))
         tk.Label(prog_frame, textvariable=self._status_var,
                  font=("Segoe UI", 10), bg=BG, fg=MUTED, anchor="w").pack(side="left")
         self._elapsed_var = tk.StringVar(value="")
@@ -158,32 +161,39 @@ class VirusTab(tk.Frame):
         # Toolbar
         toolbar = tk.Frame(parent, bg=BG)
         toolbar.pack(fill="x", pady=(0, 8))
-        self._stop_btn = tk.Button(toolbar, text="⏹  Stop",
+        self._stop_btn = tk.Button(toolbar, text=t("virus.btn_stop"),
                                    command=self._stop_scan,
                                    font=("Segoe UI", 10), bg=SURFACE, fg=DANGER,
                                    relief="flat", bd=0, padx=12, pady=8, cursor="hand2", state="disabled")
         self._stop_btn.pack(side="left")
-        self._save_btn = tk.Button(toolbar, text="💾  Save report",
+        self._save_btn = tk.Button(toolbar, text=t("virus.btn_save"),
                                    command=self._save_report,
                                    font=("Segoe UI", 10), bg=SURFACE, fg=TEXT,
                                    relief="flat", bd=0, padx=12, pady=8, cursor="hand2", state="disabled")
         self._save_btn.pack(side="left", padx=(8, 0))
-        tk.Button(toolbar, text="✕  Clear", command=self._clear,
+        tk.Button(toolbar, text=t("virus.btn_clear"), command=self._clear,
                   font=("Segoe UI", 10), bg=SURFACE, fg=MUTED,
                   relief="flat", bd=0, padx=12, pady=8, cursor="hand2").pack(side="left", padx=(8, 0))
         self._deepscan_btn = tk.Button(
-            toolbar, text="🔬  Deep scan flagged files",
+            toolbar, text=t("virus.btn_deepscan"),
             command=self._start_deep_scan,
             font=("Segoe UI", 10, "bold"), bg=WARNING, fg="#0F1117",
             relief="flat", bd=0, padx=14, pady=8, cursor="hand2", state="disabled"
         )
         self._deepscan_btn.pack(side="right")
+        self._vt_verify_btn = tk.Button(
+            toolbar, text=t("virus.btn_verify"),
+            command=self._start_vt_verify,
+            font=("Segoe UI", 10, "bold"), bg=ACCENT2, fg="white",
+            relief="flat", bd=0, padx=14, pady=8, cursor="hand2", state="disabled"
+        )
+        self._vt_verify_btn.pack(side="right", padx=(0, 8))
 
         # Results tabs
         tab_bar = tk.Frame(parent, bg=SURFACE2)
         tab_bar.pack(fill="x", pady=(4, 0))
 
-        self._clean_count_var = tk.StringVar(value="🟢 Clean: 0")
+        self._clean_count_var = tk.StringVar(value=t("virus.clean_count", n=0))
         tk.Label(tab_bar, textvariable=self._clean_count_var,
                  font=("Segoe UI", 10), bg=SURFACE2, fg=SUCCESS
                  ).pack(side="right", padx=16)
@@ -191,16 +201,16 @@ class VirusTab(tk.Frame):
         results_container = tk.Frame(parent, bg=BG)
         results_container.pack(fill="both", expand=True)
 
-        # Tab definitions: (key, label, color)
-        self._result_tabs   = {}   # key → Frame
-        self._result_trees  = {}   # key → Treeview
-        self._result_counts = {}   # key → IntVar (for badge)
-        self._tab_btns      = {}   # key → Button
+        self._result_tabs   = {}
+        self._result_trees  = {}
+        self._result_counts = {}
+        self._tab_btns      = {}
         self._active_tab    = "malicious"
 
         tab_defs = [
-            ("malicious",  "🔴 Malicious",  DANGER),
-            ("suspicious", "🟡 Suspicious", WARNING),
+            ("malicious",  t("virus.tab_malicious"),  DANGER),
+            ("suspicious", t("virus.tab_suspicious"), WARNING),
+            ("vt",         t("virus.tab_online"),     ACCENT),
         ]
 
         for key, label, color in tab_defs:
@@ -220,10 +230,14 @@ class VirusTab(tk.Frame):
             btn.pack(side="left")
             self._tab_btns[key] = btn
 
+            if key == "vt":
+                self._build_vt_tab(frame)
+                continue
+
             # Build tree inside this frame
             tf  = tk.Frame(frame, bg=BG)
             tf.pack(fill="both", expand=True)
-            vsb = tk.Scrollbar(tf)
+            vsb = ttk.Scrollbar(tf)
             vsb.pack(side="right", fill="y")
             tree = ttk.Treeview(
                 tf,
@@ -233,10 +247,10 @@ class VirusTab(tk.Frame):
                 selectmode="browse"
             )
             vsb.config(command=tree.yview)
-            tree.heading("name",     text="File")
-            tree.heading("score",    text="Score")
-            tree.heading("findings", text="Top finding")
-            tree.heading("entropy",  text="Entropy")
+            tree.heading("name",     text=t("virus.col_file"))
+            tree.heading("score",    text=t("virus.col_score"))
+            tree.heading("findings", text=t("virus.col_finding"))
+            tree.heading("entropy",  text=t("virus.col_entropy"))
             tree.column("name",     width=200, minwidth=120, stretch=False)
             tree.column("score",    width=70,  minwidth=50,  stretch=False, anchor="center")
             tree.column("findings", width=480, minwidth=200, stretch=True)
@@ -255,7 +269,7 @@ class VirusTab(tk.Frame):
             frame.lower()
         self._result_tabs[key].lift()
 
-        colors = {"malicious": DANGER, "suspicious": WARNING, "clean": SUCCESS}
+        colors = {"malicious": DANGER, "suspicious": WARNING, "clean": SUCCESS, "vt": ACCENT}
         for k, btn in self._tab_btns.items():
             if k == key:
                 btn.config(bg=colors[k], fg="white")
@@ -264,7 +278,7 @@ class VirusTab(tk.Frame):
 
     def _update_tab_badge(self, key: str):
         count = self._result_counts[key].get()
-        labels = {"malicious": "🔴 Malicious", "suspicious": "🟡 Suspicious", "clean": "🟢 Clean"}
+        labels = {"malicious": t("virus.tab_malicious"), "suspicious": t("virus.tab_suspicious"), "clean": t("virus.clean_count", n=""), "vt": t("virus.tab_online")}
         self._tab_btns[key].config(text=f"{labels[key]}  ({count})")
 
     # ── Drive helpers ─────────────────────────────────────────────────────────
@@ -300,14 +314,14 @@ class VirusTab(tk.Frame):
         info = db_info()
         if info["exists"]:
             upd = f"  ·  updated {info['updated']}" if info["updated"] else ""
-            self._db_var.set(f"Hash DB: {info['count']:,} malware hashes{upd}")
+            self._db_var.set(t("virus.hash_db", n=f"{info['count']:,}", date=info['updated'] or ""))
         else:
-            self._db_var.set("Hash DB: not downloaded yet — click Update Hash DB")
+            self._db_var.set(t("virus.hash_db_none"))
 
         if yara_engine.is_available():
-            self._yara_var.set("  ·  YARA: ✓ active")
+            self._yara_var.set(t("virus.yara_active"))
         else:
-            self._yara_var.set("  ·  YARA: not installed (pip install yara-python)")
+            self._yara_var.set(t("virus.yara_missing"))
 
     def _update_db(self):
         self._db_var.set("Downloading…")
@@ -341,21 +355,23 @@ class VirusTab(tk.Frame):
         self._browse_btn.config(state="normal")
 
     # ── Timer ─────────────────────────────────────────────────────────────────
-    @staticmethod
-    def _fmt_elapsed(seconds: float) -> str:
+    def _fmt_elapsed(self, seconds: float) -> str:
+        sec = t("virus.time_s")
+        mnt = t("virus.time_m")
+        hrs = t("virus.time_h")
         s = int(seconds)
         if s < 60:
-            return f"{s}s"
+            return f"{s}{sec}"
         m, s = divmod(s, 60)
         if m < 60:
-            return f"{m}m {s:02d}s"
+            return f"{m}{mnt} {s:02d}{sec}"
         h, m = divmod(m, 60)
-        return f"{h}h {m:02d}m {s:02d}s"
+        return f"{h}{hrs} {m:02d}{mnt} {s:02d}{sec}"
 
     def _tick_timer(self):
         """Ticks every second — keeps running until _stop_timer() is called."""
         elapsed = time.time() - self._start_time
-        self._elapsed_var.set(f"⏱ {self._fmt_elapsed(elapsed)}")
+        self._elapsed_var.set(f"{t('virus.elapsed', t=self._fmt_elapsed(elapsed))}")
         self._timer_id = self._app.after(1000, self._tick_timer)
 
     def _stop_timer(self):
@@ -383,6 +399,8 @@ class VirusTab(tk.Frame):
         ".pdf", ".docx", ".xlsx", ".pptx", ".odt", ".ods",
         # Compiled assets / caches
         ".pyc", ".pyo", ".class",
+        # Locale / translation files
+        ".mo", ".po", ".pot",
         # Game asset formats
         ".crp",   # Cities: Skylines assets
         ".unity3d", ".assetbundle", ".assets",  # Unity
@@ -429,7 +447,7 @@ class VirusTab(tk.Frame):
     def _start_scan(self):
         targets = self._get_targets()
         if not targets:
-            messagebox.showwarning("Nothing selected",
+            messagebox.showwarning(t("common.warning"),
                                    "Select at least one drive, or browse to a single file.")
             return
 
@@ -441,7 +459,7 @@ class VirusTab(tk.Frame):
         skip_media = conf["scanner"]["skip_media"]
 
         # Lock UI and start immediately
-        self._status_var.set("Scanning…")
+        self._status_var.set(t("virus.status_finding"))
         self._count_var.set("0 done  ·  0 found")
         self._progress.config(mode="determinate", maximum=100)
         self._progress["value"] = 0
@@ -476,7 +494,7 @@ class VirusTab(tk.Frame):
             skip_dirs  = DEFAULT_SKIP | extra_dirs
 
             # ── Phase 1: find all files ───────────────────────────────────────
-            self._app.after(0, self._status_var.set, "Finding files…")
+            self._app.after(0, self._status_var.set, t("virus.status_finding"))
             files        = []
             last_ui_upd  = [time.time()]
 
@@ -527,7 +545,7 @@ class VirusTab(tk.Frame):
                 self._progress.stop()
                 self._progress.config(mode="determinate", maximum=total)
                 self._progress["value"] = 0
-                self._status_var.set(f"Scanning {total:,} file(s)…")
+                self._status_var.set(t("virus.status_scanning", n=total))
                 self._count_var.set(f"0 / {total:,}")
             self._app.after(0, start_phase2)
 
@@ -611,7 +629,7 @@ class VirusTab(tk.Frame):
     def _finish_scan_final(self, total):
         self._stop_timer()
         elapsed = time.time() - self._start_time
-        self._elapsed_var.set(f"⏱ took {self._fmt_elapsed(elapsed)}")
+        self._elapsed_var.set(f"{t('virus.took', t=self._fmt_elapsed(elapsed))}")
         try:
             if str(self._progress.cget("mode")) == "indeterminate":
                 self._progress.stop()
@@ -623,12 +641,12 @@ class VirusTab(tk.Frame):
         suspicious = sum(1 for r in self._results if r["verdict"] == "suspicious")
         scanned    = sum(1 for r in self._results if r["verdict"] not in ("skipped", "error"))
         stopped    = self._stop.is_set()
-        msg = "Scan stopped" if stopped else "Scan complete"
+        msg = t("virus.status_stopped_word") if stopped else t("virus.status_complete_word")
         self._status_var.set(
-            f"{msg} — {scanned:,} scanned  ·  "
-            f"{malicious} malicious  ·  {suspicious} suspicious"
+            f"{msg} — {scanned:,} {t('virus.word_scanned')}  ·  "
+            f"{malicious} {t('virus.word_malicious')}  ·  {suspicious} {t('virus.word_suspicious')}"
         )
-        self._count_var.set(f"{total:,} processed")
+        self._count_var.set(f"{total:,} {t('virus.word_processed')}")
         self._scan_btn.config(state="normal")
         self._stop_btn.config(state="disabled")
         self._unlock_controls()
@@ -637,6 +655,201 @@ class VirusTab(tk.Frame):
         flagged = [r for r in self._results if r["verdict"] in ("malicious", "suspicious")]
         if flagged and not self._stop.is_set():
             self._deepscan_btn.config(state="normal")
+            self._vt_verify_btn.config(state="normal")
+
+    # ── Online Verification (VirusTotal) ──────────────────────────────────────
+    def _build_vt_tab(self, parent):
+        # Load saved key from config
+        saved_key = cfg.load()["scanner"].get("virustotal_key", "")
+        if saved_key:
+            self._vt_key_var.set(saved_key)
+        # API key row
+        key_frame = tk.Frame(parent, bg=SURFACE2)
+        key_frame.pack(fill="x", pady=(0, 1))
+
+        tk.Label(key_frame, text=t("virus.vt_api_label"),
+                 font=("Segoe UI", 10), bg=SURFACE2, fg=MUTED).pack(side="left", padx=12, pady=8)
+
+        kf = tk.Frame(key_frame, bg=SURFACE2)
+        kf.pack(side="left", fill="x", expand=True, pady=6)
+        self._vt_key_entry = tk.Entry(kf, textvariable=self._vt_key_var,
+                                       font=("Segoe UI", 10), bg=BG, fg=TEXT,
+                                       insertbackground=ACCENT, relief="flat", bd=6, show="•")
+        self._vt_key_entry.pack(fill="x")
+
+        self._vt_show_btn = tk.Button(key_frame, text=t("virus.vt_show"),
+                                       command=self._vt_toggle_key,
+                                       font=("Segoe UI", 9), bg=SURFACE2, fg=MUTED,
+                                       relief="flat", bd=0, padx=8, cursor="hand2")
+        self._vt_show_btn.pack(side="left", padx=4)
+
+        tk.Label(key_frame, text=t("virus.vt_api_hint"),
+                 font=("Segoe UI", 9), bg=SURFACE2, fg=MUTED).pack(side="left", padx=(0, 12))
+
+        # Status row
+        vt_status_row = tk.Frame(parent, bg=BG)
+        vt_status_row.pack(fill="x", pady=(6, 4))
+        self._vt_status_var = tk.StringVar(value=t("virus.vt_status_ready"))
+        tk.Label(vt_status_row, textvariable=self._vt_status_var,
+                 font=("Segoe UI", 10), bg=BG, fg=MUTED).pack(side="left")
+        self._vt_count_var = tk.StringVar(value="")
+        tk.Label(vt_status_row, textvariable=self._vt_count_var,
+                 font=("Segoe UI", 10, "bold"), bg=BG, fg=ACCENT2).pack(side="right")
+
+        self._vt_progress = ttk.Progressbar(parent, mode="determinate", maximum=100)
+        self._vt_progress.pack(fill="x", pady=(0, 6))
+
+        # Results tree
+        tf  = tk.Frame(parent, bg=BG)
+        tf.pack(fill="both", expand=True)
+        vsb = ttk.Scrollbar(tf)
+        vsb.pack(side="right", fill="y")
+        self._vt_tree = ttk.Treeview(
+            tf,
+            columns=("verdict", "name", "detections", "engines", "threat"),
+            show="headings",
+            yscrollcommand=vsb.set,
+            selectmode="browse"
+        )
+        vsb.config(command=self._vt_tree.yview)
+        self._vt_tree.heading("verdict",    text=t("virus.col_verdict"))
+        self._vt_tree.heading("name",       text=t("virus.col_file"))
+        self._vt_tree.heading("detections", text=t("virus.col_detections"))
+        self._vt_tree.heading("engines",    text=t("virus.col_engines"))
+        self._vt_tree.heading("threat",     text=t("virus.col_threat"))
+        self._vt_tree.column("verdict",    width=120, minwidth=90,  stretch=False)
+        self._vt_tree.column("name",       width=200, minwidth=120, stretch=False)
+        self._vt_tree.column("detections", width=100, minwidth=80,  stretch=False, anchor="center")
+        self._vt_tree.column("engines",    width=80,  minwidth=60,  stretch=False, anchor="center")
+        self._vt_tree.column("threat",     width=300, minwidth=150, stretch=True)
+        self._vt_tree.pack(fill="both", expand=True)
+        self._vt_tree.tag_configure("malicious",  foreground=DANGER)
+        self._vt_tree.tag_configure("suspicious", foreground=WARNING)
+        self._vt_tree.tag_configure("clean",      foreground=SUCCESS)
+        self._vt_tree.tag_configure("unknown",    foreground=MUTED)
+        self._vt_tree.tag_configure("error",      foreground=MUTED)
+        self._vt_tree.bind("<Double-1>", self._vt_open_browser)
+
+    def _vt_toggle_key(self):
+        show = self._vt_key_entry.cget("show")
+        self._vt_key_entry.config(show="" if show == "•" else "•")
+        self._vt_show_btn.config(text=t("virus.vt_hide") if show == "•" else t("virus.vt_show"))
+
+    def _start_vt_verify(self):
+        api_key = self._vt_key_var.get().strip()
+        if not api_key:
+            self._switch_result_tab("vt")
+            messagebox.showwarning(t("virus.no_key"),
+                                   "Enter your VirusTotal API key in the Online tab.")
+            return
+
+        # Only verify what's currently shown in malicious/suspicious trees
+        flagged = []
+        seen_hashes = set()
+        for key in ("malicious", "suspicious"):
+            tree = self._result_trees[key]
+            for iid in tree.get_children():
+                name = tree.item(iid, "values")[0]
+                # Find matching result with a hash
+                for r in self._results:
+                    if r["name"] == name and r.get("hash") and r["hash"] not in seen_hashes:
+                        flagged.append(r)
+                        seen_hashes.add(r["hash"])
+                        break
+
+        if not flagged:
+            messagebox.showinfo(t("common.warning"),
+                                "No flagged files with computed hashes. Run a normal scan first.")
+            return
+
+        self._switch_result_tab("vt")
+        for item in self._vt_tree.get_children():
+            self._vt_tree.delete(item)
+
+        total = len(flagged)
+        self._vt_progress.config(maximum=total)
+        self._vt_progress["value"] = 0
+        self._vt_status_var.set(f"Querying VirusTotal for {total} file(s)…")
+        self._vt_count_var.set(f"0 / {total}")
+        self._vt_verify_btn.config(state="disabled")
+
+        import time as _time
+
+        def worker():
+            for i, r in enumerate(flagged):
+                if self._stop.is_set():
+                    break
+                file_hash = r.get("hash") or r.get("entropy_full") and None
+                if not file_hash:
+                    continue
+                try:
+                    raw    = vt_lookup_hash(api_key, file_hash)
+                    result = vt_parse_result(raw)
+                except Exception as e:
+                    result = {"status": "error", "malicious": 0, "suspicious": 0,
+                              "total": 0, "names": [], "threat_label": str(e)}
+
+                self._app.after(0, self._vt_add_row, r["name"], r["path"],
+                                result, i + 1, total)
+
+                # Free tier: 4 req/min → wait 15s between requests
+                if i < total - 1 and not self._stop.is_set():
+                    for _ in range(15):
+                        if self._stop.is_set():
+                            break
+                        _time.sleep(1)
+                        remaining = 15 - _ - 1
+                        self._app.after(0, self._vt_status_var.set,
+                                        f"Waiting {remaining}s (free tier limit)…  {i+1}/{total} done")
+
+            def finish():
+                self._vt_status_var.set(f"Online verification complete — {total} file(s) checked")
+                self._vt_verify_btn.config(state="normal")
+                self._vt_progress["value"] = total
+            self._app.after(0, finish)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _vt_add_row(self, name, path, result, done, total):
+        status = result["status"]
+        mal    = result["malicious"]
+        tot    = result["total"]
+        threat = result.get("threat_label") or ", ".join(result.get("names", [])[:2])
+
+        icons = {
+            "malicious":  t("virus.tab_malicious"),
+            "suspicious": t("virus.tab_suspicious"),
+            "clean":      "Clean",
+            "unknown":    t("virus.vt_not_in_db"),
+            "error":      t("virus.vt_error"),
+        }
+        verdict_label = icons.get(status, status)
+        det_str       = f"{mal} / {tot}" if tot > 0 else "—"
+
+        self._vt_tree.insert("", "end",
+                              values=(verdict_label, name, det_str, tot, threat),
+                              tags=(status,))
+        self._vt_progress["value"] = done
+        self._vt_count_var.set(f"{done} / {total}")
+
+        # Update Online tab badge
+        self._result_counts["vt"].set(done)
+        self._update_tab_badge("vt")
+
+        if status == "malicious":
+            self._vt_status_var.set(f"{name} confirmed malicious by {mal} engines!")
+
+    def _vt_open_browser(self, event):
+        sel = self._vt_tree.selection()
+        if not sel:
+            return
+        name = self._vt_tree.item(sel[0], "values")[1]
+        # Find hash for this file
+        for r in self._results:
+            if r["name"] == name and r.get("hash"):
+                import webbrowser
+                webbrowser.open(f"https://www.virustotal.com/gui/file/{r['hash']}")
+                return
 
     # ── Deep scan ─────────────────────────────────────────────────────────────
     def _start_deep_scan(self):
@@ -663,8 +876,7 @@ class VirusTab(tk.Frame):
             self._update_tab_badge(key)
 
         # Reset clean counter
-        self._result_counts["clean"].set(0)
-        self._clean_count_var.set("🟢 Clean: 0")
+        self._clean_count_var.set(t("virus.clean_count", n=0))
 
         self._results = []
         total = len(flagged)
@@ -753,7 +965,7 @@ class VirusTab(tk.Frame):
         tab_key = verdict if verdict in self._result_trees else "clean"
         if tab_key == "clean":
             self._result_counts["clean"].set(self._result_counts["clean"].get() + 1)
-            self._clean_count_var.set(f"🟢 Clean: {self._result_counts['clean'].get():,}")
+            self._clean_count_var.set(t("virus.clean_count", n=f"{self._result_counts['clean'].get():,}"))
             return
         tree = self._result_trees[tab_key]
         if len(tree.get_children()) < 500:
@@ -790,7 +1002,7 @@ class VirusTab(tk.Frame):
             if "clean" not in self._result_counts:
                 self._result_counts["clean"] = current
             self._result_counts["clean"].set(self._result_counts["clean"].get() + 1)
-            self._clean_count_var.set(f"🟢 Clean: {self._result_counts['clean'].get():,}")
+            self._clean_count_var.set(t("virus.clean_count", n=f"{self._result_counts['clean'].get():,}"))
             return
         tree = self._result_trees[tab_key]
         if len(tree.get_children()) < 500:
@@ -815,14 +1027,14 @@ class VirusTab(tk.Frame):
         self._stop.set()
         self._stop_timer()
         elapsed = time.time() - self._start_time
-        self._elapsed_var.set(f"⏱ stopped at {self._fmt_elapsed(elapsed)}")
+        self._elapsed_var.set(f"{t('virus.stopped_at', t=self._fmt_elapsed(elapsed))}")
         try:
             if str(self._progress.cget("mode")) == "indeterminate":
                 self._progress.stop()
                 self._progress.config(mode="determinate")
         except Exception:
             pass
-        self._status_var.set("Stopping…")
+        self._status_var.set(t("virus.btn_stop"))
         self._stop_btn.config(state="disabled")
         self._unlock_controls()
 
@@ -831,18 +1043,26 @@ class VirusTab(tk.Frame):
         for tree in self._result_trees.values():
             for item in tree.get_children():
                 tree.delete(item)
+        # Clear VT tree too
+        if hasattr(self, "_vt_tree"):
+            for item in self._vt_tree.get_children():
+                self._vt_tree.delete(item)
+            self._vt_progress["value"] = 0
+            self._vt_status_var.set(t("virus.vt_status_ready"))
+            self._vt_count_var.set("")
         for key, var in self._result_counts.items():
             var.set(0)
             if key in self._tab_btns:
                 self._update_tab_badge(key)
-        self._clean_count_var.set("🟢 Clean: 0")
+        self._clean_count_var.set(t("virus.clean_count", n=0))
         self._results        = []
         self._progress["value"] = 0
-        self._status_var.set("Select drives or a file, then press Start Scan.")
+        self._status_var.set(t("virus.status_ready"))
         self._count_var.set("")
         self._elapsed_var.set("")
         self._save_btn.config(state="disabled")
         self._deepscan_btn.config(state="disabled")
+        self._vt_verify_btn.config(state="disabled")
 
     # ── Detail popup ──────────────────────────────────────────────────────────
     def _show_details(self, event, tab_key: str):
@@ -878,7 +1098,7 @@ class VirusTab(tk.Frame):
         # Details text
         txt_frame = tk.Frame(win, bg=SURFACE)
         txt_frame.pack(fill="both", expand=True, padx=20, pady=(8, 16))
-        vsb = tk.Scrollbar(txt_frame)
+        vsb = ttk.Scrollbar(txt_frame)
         vsb.pack(side="right", fill="y")
         txt = tk.Text(txt_frame, bg=SURFACE, fg=TEXT, font=("Consolas", 10),
                       relief="flat", bd=8, wrap="word", yscrollcommand=vsb.set)
@@ -942,7 +1162,7 @@ class VirusTab(tk.Frame):
         txt.config(state="disabled")
 
         # Open location button
-        tk.Button(win, text="Open file location",
+        tk.Button(win, text=t("virus.detail_open"),
                   command=lambda: self._open_path(os.path.dirname(result["path"])),
                   font=("Segoe UI", 10), bg=SURFACE, fg=TEXT,
                   relief="flat", bd=0, padx=12, pady=6, cursor="hand2").pack(pady=(0, 12))
@@ -963,11 +1183,11 @@ class VirusTab(tk.Frame):
 
         menu = tk.Menu(self._app, tearoff=0, bg=SURFACE2, fg=TEXT,
                        activebackground=ACCENT, activeforeground="white", relief="flat", bd=0)
-        menu.add_command(label="View details",
+        menu.add_command(label=t("virus.detail_findings"),
                          command=lambda: self._open_detail_window(result))
-        menu.add_command(label="Open location",
+        menu.add_command(label=t("common.open_location"),
                          command=lambda: self._open_path(os.path.dirname(path)))
-        menu.add_command(label="Copy path",
+        menu.add_command(label=t("common.copy_path"),
                          command=lambda: self._copy(path))
         if result["verdict"] in ("malicious", "suspicious"):
             menu.add_separator()
@@ -985,7 +1205,7 @@ class VirusTab(tk.Frame):
             tree.delete(iid)
             self._status_var.set(f"Deleted: {os.path.basename(path)}")
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror(t("virus.vt_error"), str(e))
 
     def _open_path(self, path):
         try:
@@ -996,7 +1216,7 @@ class VirusTab(tk.Frame):
             else:
                 os.system(f'xdg-open "{path}"')
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror(t("virus.vt_error"), str(e))
 
     def _copy(self, text):
         self._app.clipboard_clear()
@@ -1024,7 +1244,7 @@ class VirusTab(tk.Frame):
         if self._file_var.get().strip():
             target_desc = self._file_var.get().strip()
         elif self._all_drives_var.get():
-            target_desc = "All drives"
+            target_desc = t("virus.all_drives")
         else:
             selected = [d for d, v in self._drive_vars.items() if v.get()]
             target_desc = ", ".join(selected) if selected else "Unknown"
