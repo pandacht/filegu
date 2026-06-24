@@ -7,107 +7,113 @@ from utils.constants import (
     SUCCESS, DANGER,
 )
 from utils import config as cfg
+from utils.lang import t, available_languages
 
 
 class SettingsTab(tk.Frame):
     def __init__(self, parent, app_ref):
         super().__init__(parent, bg=BG)
-        self._app = app_ref
-        self._vars = {}   # key_path → tk var
+        self._app  = app_ref
+        self._vars = {}
+        self._canvas = None
         self._build(self)
 
-    # ── Layout ────────────────────────────────────────────────────────────────
     def _build(self, parent):
         # Scrollable canvas
-        canvas = tk.Canvas(parent, bg=BG, highlightthickness=0)
-        vsb    = tk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=vsb.set)
+        self._canvas = tk.Canvas(parent, bg=BG, highlightthickness=0)
+        vsb = ttk.Scrollbar(parent, orient="vertical", command=self._canvas.yview)
+        self._canvas.configure(yscrollcommand=vsb.set)
         vsb.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
+        self._canvas.pack(side="left", fill="both", expand=True)
 
-        inner     = tk.Frame(canvas, bg=BG)
-        canvas_win = canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner     = tk.Frame(self._canvas, bg=BG)
+        canvas_win = self._canvas.create_window((0, 0), window=inner, anchor="nw")
 
-        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_win, width=e.width))
-        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
+        inner.bind("<Configure>", lambda e: self._canvas.configure(
+            scrollregion=self._canvas.bbox("all")))
+        self._canvas.bind("<Configure>", lambda e: self._canvas.itemconfig(
+            canvas_win, width=e.width))
+
+        def _on_enter(e):
+            self._canvas.bind_all("<MouseWheel>",
+                lambda ev: self._canvas.yview_scroll(int(-1*(ev.delta/120)), "units"))
+        def _on_leave(e):
+            self._canvas.unbind_all("<MouseWheel>")
+
+        self._canvas.bind("<Enter>", _on_enter)
+        self._canvas.bind("<Leave>", _on_leave)
+        inner.bind("<Enter>", _on_enter)
+        inner.bind("<Leave>", _on_leave)
 
         conf = cfg.load()
 
-        # ── Scanner settings ──────────────────────────────────────────────────
-        self._section(inner, "VIRUS SCANNER")
-
-        self._row_spinbox(inner, "Threads",
-                          "How many files to scan in parallel. Higher = faster but uses more CPU.",
-                          "scanner.threads", conf["scanner"]["threads"],
-                          from_=1, to=32)
-
-        self._row_radio(inner, "Scan depth",
-                        "How deep into subfolders to go.",
+        # ── Scanner ───────────────────────────────────────────────────────────
+        self._section(inner, t("settings.section_virus"))
+        self._row_spinbox(inner, t("settings.threads"),
+                          t("settings.threads_desc"),
+                          "scanner.threads", conf["scanner"]["threads"], from_=1, to=32)
+        self._row_radio(inner, t("settings.depth"),
+                        t("settings.depth_desc"),
                         "scanner.depth", conf["scanner"]["depth"],
-                        [("Full (everything)", "full"),
-                         ("3 levels deep",     "3"),
-                         ("1 level only (fast)", "1")])
-
-        self._row_check(inner, "Skip media & font files",
-                        "Skip .jpg, .png, .mp4, .ttf etc. — they can't execute.",
+                        [(t("settings.depth_full"), "full"),
+                         (t("settings.depth_3"), "3"),
+                         (t("settings.depth_1"), "1")])
+        self._row_check(inner, t("settings.skip_media"),
+                        t("settings.skip_media_desc"),
                         "scanner.skip_media", conf["scanner"]["skip_media"])
-
-        self._row_check(inner, "Executables & scripts only",
-                        "Only scan .exe, .dll, .bat, .ps1, .js etc.",
+        self._row_check(inner, t("settings.exe_only"),
+                        t("settings.exe_only_desc"),
                         "scanner.exe_only", conf["scanner"]["exe_only"])
-
-        self._row_tags(inner, "Extra extensions to skip",
-                       "Additional file extensions to never scan. One per line, with dot. e.g.  .crp  .pak  .unity3d",
+        self._row_entry(inner, t("settings.vt_key"),
+                        t("settings.vt_key_desc"),
+                        "scanner.virustotal_key", conf["scanner"].get("virustotal_key", ""),
+                        secret=True)
+        self._row_tags(inner, t("settings.extra_ext"),
+                       t("settings.extra_ext_desc"),
                        "scanner.extra_skip_ext", conf["scanner"]["extra_skip_ext"])
-
-        self._row_tags(inner, "Extra folders to skip",
-                       "Folder names to skip during scan. e.g.  Steam  Games  node_modules",
+        self._row_tags(inner, t("settings.extra_dirs"),
+                       t("settings.extra_dirs_desc"),
                        "scanner.extra_skip_dirs", conf["scanner"]["extra_skip_dirs"])
 
-        # ── Search settings ───────────────────────────────────────────────────
-        self._section(inner, "SEARCH")
-
-        self._row_radio(inner, "Default match mode",
-                        "Which mode is selected when you open the Search tab.",
+        # ── Search ────────────────────────────────────────────────────────────
+        self._section(inner, t("settings.section_search"))
+        self._row_radio(inner, t("settings.default_mode"), "",
                         "search.default_mode", conf["search"]["default_mode"],
-                        [("Keyword (partial match)", "keyword"),
-                         ("Exact name",              "exact")])
-
-        self._row_radio(inner, "Default search for",
-                        "What to search for by default.",
+                        [(t("settings.keyword"), "keyword"),
+                         (t("settings.exact"), "exact")])
+        self._row_radio(inner, t("settings.default_type"), "",
                         "search.default_type", conf["search"]["default_type"],
-                        [("Files & folders", "both"),
-                         ("Files only",      "files"),
-                         ("Folders only",    "folders")])
+                        [(t("search.for_both"), "both"),
+                         (t("search.for_files"), "files"),
+                         (t("search.for_folders"), "folders")])
 
-        # ── UI settings ───────────────────────────────────────────────────────
-        self._section(inner, "INTERFACE")
-
-        self._row_radio(inner, "Default tab on startup",
-                        "Which tab opens first when you launch the app.",
+        # ── Interface ─────────────────────────────────────────────────────────
+        self._section(inner, t("settings.section_ui"))
+        self._row_radio(inner, t("settings.default_tab"), t("settings.default_tab_desc"),
                         "ui.default_tab", conf["ui"]["default_tab"],
-                        [("Search",        "Search"),
-                         ("Cache Cleaner", "Cache Cleaner"),
-                         ("Virus Scanner", "Virus Scanner")])
+                        [(t("tab.search"),  "Search"),
+                         (t("tab.cache"),   "Cache Cleaner"),
+                         (t("tab.virus"),   "Virus Scanner")])
 
-        # ── Save / reset buttons ──────────────────────────────────────────────
+        langs = available_languages()
+        self._row_radio(inner, t("settings.language"), t("settings.language_desc"),
+                        "ui.language", conf["ui"].get("language", "en"),
+                        [(name, code) for code, name in langs])
+
+        # ── Buttons ───────────────────────────────────────────────────────────
         btn_row = tk.Frame(inner, bg=BG)
         btn_row.pack(fill="x", padx=24, pady=(24, 32))
-
-        tk.Button(btn_row, text="💾  Save settings",
+        tk.Button(btn_row, text=t("settings.btn_save"),
                   command=self._save,
                   font=("Segoe UI", 12, "bold"), bg=ACCENT, fg="white",
                   relief="flat", bd=0, padx=20, pady=10, cursor="hand2",
                   activebackground=ACCENT2, activeforeground="white"
                   ).pack(side="left")
-
-        tk.Button(btn_row, text="↺  Reset to defaults",
+        tk.Button(btn_row, text=t("settings.btn_reset"),
                   command=self._reset,
                   font=("Segoe UI", 11), bg=SURFACE, fg=MUTED,
                   relief="flat", bd=0, padx=16, pady=10, cursor="hand2"
                   ).pack(side="left", padx=(12, 0))
-
         self._status_var = tk.StringVar(value="")
         tk.Label(btn_row, textvariable=self._status_var,
                  font=("Segoe UI", 10), bg=BG, fg=SUCCESS).pack(side="left", padx=(16, 0))
@@ -115,92 +121,106 @@ class SettingsTab(tk.Frame):
     # ── Section header ────────────────────────────────────────────────────────
     def _section(self, parent, title):
         row = tk.Frame(parent, bg=BG)
-        row.pack(fill="x", padx=24, pady=(24, 8))
+        row.pack(fill="x", padx=24, pady=(20, 6))
         tk.Label(row, text=title, font=("Segoe UI", 9, "bold"),
                  bg=BG, fg=ACCENT2).pack(side="left")
         tk.Frame(row, bg=SURFACE2, height=1).pack(
             side="left", fill="x", expand=True, padx=(10, 0), pady=6)
 
-    def _label_col(self, parent, label, desc):
-        """Left column: setting name + description."""
-        col = tk.Frame(parent, bg=SURFACE, width=300)
-        col.pack(side="left", fill="y", padx=(16, 0), pady=10)
-        col.pack_propagate(False)
-        tk.Label(col, text=label, font=("Segoe UI", 11),
-                 bg=SURFACE, fg=TEXT, anchor="w").pack(anchor="w")
-        tk.Label(col, text=desc, font=("Segoe UI", 9),
-                 bg=SURFACE, fg=MUTED, anchor="w", wraplength=280, justify="left"
-                 ).pack(anchor="w", pady=(2, 0))
-        return col
-
-    # ── Row types ─────────────────────────────────────────────────────────────
-    def _row_frame(self, parent):
+    # ── Row builders ──────────────────────────────────────────────────────────
+    def _row_check(self, parent, label, desc, key, default):
         row = tk.Frame(parent, bg=SURFACE)
         row.pack(fill="x", padx=24, pady=2)
-        return row
-
-    def _row_check(self, parent, label, desc, key, default):
-        row = self._row_frame(parent)
-        self._label_col(row, label, desc)
         var = tk.BooleanVar(value=default)
         self._vars[key] = var
-        tk.Checkbutton(row, variable=var, bg=SURFACE, fg=TEXT,
-                       selectcolor=SURFACE2, activebackground=SURFACE,
-                       activeforeground=TEXT, relief="flat"
-                       ).pack(side="left", padx=(20, 0))
+        cb = tk.Checkbutton(row, variable=var, text=label,
+                             font=("Segoe UI", 11), bg=SURFACE, fg=TEXT,
+                             selectcolor=SURFACE2, activebackground=SURFACE,
+                             activeforeground=TEXT, relief="flat")
+        cb.pack(side="left", padx=16, pady=8)
+        if desc:
+            tk.Label(row, text=desc, font=("Segoe UI", 9),
+                     bg=SURFACE, fg=MUTED).pack(side="left", padx=(0, 16))
 
     def _row_spinbox(self, parent, label, desc, key, default, from_=1, to=32):
-        row = self._row_frame(parent)
-        self._label_col(row, label, desc)
+        row = tk.Frame(parent, bg=SURFACE)
+        row.pack(fill="x", padx=24, pady=2)
+        tk.Label(row, text=label, font=("Segoe UI", 11),
+                 bg=SURFACE, fg=TEXT, width=22, anchor="w").pack(side="left", padx=16, pady=8)
         var = tk.IntVar(value=default)
         self._vars[key] = var
-        sb = tk.Spinbox(row, from_=from_, to=to, textvariable=var, width=5,
-                        font=("Segoe UI", 11), bg=SURFACE2, fg=TEXT,
-                        buttonbackground=SURFACE2, relief="flat",
-                        insertbackground=ACCENT)
-        sb.pack(side="left", padx=(20, 0), pady=10)
+        tk.Spinbox(row, from_=from_, to=to, textvariable=var, width=5,
+                   font=("Segoe UI", 11), bg=SURFACE2, fg=TEXT,
+                   buttonbackground=SURFACE2, relief="flat",
+                   insertbackground=ACCENT).pack(side="left", pady=8)
+        if desc:
+            tk.Label(row, text=desc, font=("Segoe UI", 9),
+                     bg=SURFACE, fg=MUTED).pack(side="left", padx=(12, 16))
 
     def _row_radio(self, parent, label, desc, key, default, options):
-        row = self._row_frame(parent)
-        self._label_col(row, label, desc)
+        row = tk.Frame(parent, bg=SURFACE)
+        row.pack(fill="x", padx=24, pady=2)
+        tk.Label(row, text=label, font=("Segoe UI", 11),
+                 bg=SURFACE, fg=TEXT, width=22, anchor="w").pack(side="left", padx=16, pady=8)
         var = tk.StringVar(value=default)
         self._vars[key] = var
-        rb_col = tk.Frame(row, bg=SURFACE)
-        rb_col.pack(side="left", padx=(20, 0), pady=10)
+        opts_frame = tk.Frame(row, bg=SURFACE)
+        opts_frame.pack(side="left", pady=6)
         for text, val in options:
-            tk.Radiobutton(rb_col, text=text, variable=var, value=val,
+            tk.Radiobutton(opts_frame, text=text, variable=var, value=val,
                            font=("Segoe UI", 10), bg=SURFACE, fg=TEXT,
                            selectcolor=SURFACE2, activebackground=SURFACE,
                            activeforeground=TEXT, relief="flat"
-                           ).pack(anchor="w", pady=1)
+                           ).pack(side="left", padx=(0, 12))
 
-    def _row_tags(self, parent, label, desc, key, default):
-        """Multi-line text box for list values (extensions / folder names)."""
+    def _row_entry(self, parent, label, desc, key, default, secret=False):
         row = tk.Frame(parent, bg=SURFACE)
         row.pack(fill="x", padx=24, pady=2)
-        self._label_col(row, label, desc)
+        tk.Label(row, text=label, font=("Segoe UI", 11),
+                 bg=SURFACE, fg=TEXT, width=22, anchor="w").pack(side="left", padx=16, pady=8)
+        var = tk.StringVar(value=default)
+        self._vars[key] = var
+        ef = tk.Frame(row, bg=SURFACE2)
+        ef.pack(side="left", fill="x", expand=True, pady=6, padx=(0, 16))
+        entry = tk.Entry(ef, textvariable=var, font=("Segoe UI", 10),
+                         bg=SURFACE2, fg=TEXT, insertbackground=ACCENT,
+                         relief="flat", bd=6,
+                         show="•" if secret else "")
+        entry.pack(fill="x")
+        if desc:
+            tk.Label(row, text=desc, font=("Segoe UI", 9),
+                     bg=SURFACE, fg=MUTED).pack(side="left", padx=(0, 16))
 
+    def _row_tags(self, parent, label, desc, key, default):
+        row = tk.Frame(parent, bg=SURFACE)
+        row.pack(fill="x", padx=24, pady=2)
+        # Label on top
+        hdr = tk.Frame(row, bg=SURFACE)
+        hdr.pack(fill="x", padx=16, pady=(8, 2))
+        tk.Label(hdr, text=label, font=("Segoe UI", 11),
+                 bg=SURFACE, fg=TEXT).pack(side="left")
+        tk.Label(hdr, text=desc, font=("Segoe UI", 9),
+                 bg=SURFACE, fg=MUTED).pack(side="left", padx=(10, 0))
+        # Text box
         txt_frame = tk.Frame(row, bg=SURFACE2)
-        txt_frame.pack(side="left", fill="both", expand=True,
-                       padx=(20, 16), pady=10)
+        txt_frame.pack(fill="x", padx=16, pady=(0, 8))
         txt = tk.Text(txt_frame, font=("Consolas", 10), bg=SURFACE2, fg=TEXT,
                       insertbackground=ACCENT, relief="flat", bd=6,
-                      height=4, wrap="none")
-        txt.pack(fill="both", expand=True)
-        # Pre-fill with existing values
+                      height=3, wrap="none")
+        txt.pack(fill="x")
         txt.insert("1.0", "\n".join(default))
-        self._vars[key] = txt   # store the Text widget directly
+        self._vars[key] = txt
 
     # ── Save / reset ──────────────────────────────────────────────────────────
     def _collect(self) -> dict:
-        """Read all widgets and build a config dict."""
         conf = cfg.load()
         for key, var in self._vars.items():
-            section, field = key.split(".", 1)
+            parts   = key.split(".", 1)
+            section = parts[0]
+            field   = parts[1]
             if isinstance(var, tk.Text):
-                # Parse multi-line text into a list
                 raw   = var.get("1.0", "end").strip()
-                items = [line.strip() for line in raw.splitlines() if line.strip()]
+                items = [l.strip() for l in raw.splitlines() if l.strip()]
                 conf[section][field] = items
             elif isinstance(var, tk.BooleanVar):
                 conf[section][field] = var.get()
@@ -211,24 +231,31 @@ class SettingsTab(tk.Frame):
         return conf
 
     def _save(self):
-        conf = self._collect()
+        old_conf = cfg.load()
+        old_lang = old_conf["ui"].get("language", "en")
+        conf     = self._collect()
         if cfg.save(conf):
-            self._status_var.set("✓ Saved")
-            self._app.after(2500, lambda: self._status_var.set(""))
+            new_lang = conf["ui"].get("language", "en")
+            if old_lang != new_lang:
+                self._status_var.set(t("settings.saved"))
+                self._app.after(3000, lambda: self._status_var.set(""))
+                messagebox.showinfo("Restart required",
+                                    "Language changed. Please restart the app to apply.")
+            else:
+                self._status_var.set(t("settings.saved_no_restart"))
+                self._app.after(3000, lambda: self._status_var.set(""))
         else:
-            messagebox.showerror("Save failed",
-                                 "Could not write config.json — check file permissions.")
+            messagebox.showerror("Save failed", t("settings.save_failed"))
 
     def _reset(self):
         if not messagebox.askyesno("Reset settings",
-                                   "Reset all settings to defaults?",
+                                   t("settings.reset_confirm"),
                                    default="no"):
             return
         if cfg.save(cfg._deep_copy(cfg.DEFAULTS)):
-            # Reload the tab
             for widget in self.winfo_children():
                 widget.destroy()
             self._vars = {}
             self._build(self)
-            self._status_var.set("✓ Reset to defaults")
+            self._status_var.set(t("settings.reset_done"))
             self._app.after(2500, lambda: self._status_var.set(""))
