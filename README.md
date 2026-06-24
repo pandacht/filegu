@@ -1,82 +1,100 @@
-# File Finder
+# 🔍 Filegu
 
-A desktop utility for Windows, macOS, and Linux that lets you search for files and folders by keyword, delete them directly, clean up system cache, and scan for malware — all from a clean dark-themed GUI.
-
-Built with Python and Tkinter. No external dependencies required to run.
+A desktop utility for Windows, macOS, and Linux — search files, clean cache, scan for malware. Dark-themed GUI built with Python and Tkinter. No external dependencies required to run.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Dependencies](https://img.shields.io/badge/Dependencies-none%20required-brightgreen)
+![Languages](https://img.shields.io/badge/Languages-EN%20%7C%20RU%20%7C%20DE-orange)
 
 ---
 
 ## Features
 
-### 🔍 Search Tab
-- Search across all drives or choose a specific drive / folder
-- **Keyword mode** — partial match (`disc` finds `Discord`, `DiscordSetup.exe`, `old_discord_logs`)
-- **Exact mode** — only matches the exact filename or folder name
+### Search Tab
+- Search across all drives or a specific folder
+- **Keyword mode** — partial match (`disc` finds `Discord`, `DiscordSetup.exe`)
+- **Exact mode** — only matches the exact filename
 - Search files, folders, or both
-- Live progress bar with percentage, elapsed time, and directory counter
-- Double-click a result to open its location in Explorer / Finder
+- Live progress with drive counter, elapsed time, and current path
+- Double-click to open file location in Explorer / Finder
 - Right-click menu: open location, copy path, copy name, delete
-- Delete files or folders directly from results (with confirmation dialog)
-- Save results to a `.txt` report
+- Delete files or folders directly from results (with confirmation)
+- Save results to `.txt` report
+- Reads default mode/type/drives from Settings
 
 ### Cache Cleaner Tab
-- Scan sizes before deleting — see exactly how much each category uses
-- Choose exactly which categories to clean:
-  - **System** — Temp files, Prefetch, Thumbnails (Windows) / user cache, Trash (macOS/Linux)
-  - **Browsers** — Chrome, Edge, Firefox (all profiles), Opera, Brave
-  - **Dev tools** — npm, pip, Gradle, Maven, Yarn, pnpm, `__pycache__`, `.mypy_cache`, Cargo
-  - **IDEs** — JetBrains (IntelliJ / PyCharm / WebStorm), VS Code workspace cache
-- Shows total size to be freed before cleaning
-- Select all / Deselect all buttons
+- Scan sizes before deleting — see exactly how much each category takes
+- Select/deselect entire categories with one click
+- **System** — Temp files, Prefetch, Error Reporting, Windows Update cache, Delivery Optimization, DirectX Shader cache, Thumbnails, Font cache, Event logs, Defender history
+- **Browsers** — Chrome, Chrome GPU, Edge, Edge WebView2, Firefox, Opera, Brave
+- **Dev** — npm, pip, Gradle, Gradle wrapper, Maven, Yarn, pnpm, `__pycache__`, `.mypy_cache`, Cargo, Docker, Android AVD, NuGet, Composer, dotnet, Next.js, Parcel, Webpack/Vite
+- **IDEs** — JetBrains, VS Code workspace, VS Code extensions
+- **Apps** — Spotify, Discord, Teams, Zoom, Slack, Telegram, WhatsApp
+- **Games** — Steam shader cache, Epic Games, GOG Galaxy, Riot Games
 
 ### Virus Scanner Tab
 - **No API key required** — fully offline scanner
-- **No rate limits** — scans as fast as your hardware allows
-- Two-phase scanning: finds all files first, then scans with a normal progress bar
-- Multi-threaded scanning (configurable in Settings)
-- Results split into three tabs: 🔴 Malicious, 🟡 Suspicious, 🟢 Clean (count only)
-- Double-click any result for a full detail popup
-- Right-click to open location, copy path, or delete the file
+- **Parallel scanning** — configurable thread count
+- **Two-phase progress**: bouncing bar while finding files → normal fill bar while scanning
+- Results split into tabs: 🔴 Malicious · 🟡 Suspicious · 🟢 Clean (counter only) · 🌐 Online
+- Double-click any result for full detail popup
+- Right-click to open location, copy path, or delete
 
-**How it detects threats:**
+**Detection methods:**
 
 | Method | What it does |
 |---|---|
-| Hash database | Checks SHA-256 against 1M+ known malware hashes from MalwareBazaar |
-| YARA rules | 9 built-in rules covering PowerShell downloaders, keyloggers, ransomware, process injection, shellcode, obfuscated JS/VBS |
-| Heuristics | Extension mismatch (PE header in `.txt`), suspicious API imports, script with network + execution combo, suspicious temp folder paths |
-| Entropy analysis | Detects packed/encrypted/obfuscated files (score ≥ 7.5 = suspicious) |
-| Signature check | Authenticode verification — detects tampered signed files (hash mismatch = +60 score) |
+| Hash database | SHA-256 against 1M+ known malware hashes from MalwareBazaar |
+| YARA rules | 9 built-in rules: PowerShell downloaders, keyloggers, ransomware, process injection, shellcode, obfuscated JS/VBS |
+| Heuristics | Extension mismatch, suspicious API imports, network+exec combo, suspicious temp folder paths |
+| Entropy analysis | Detects packed/encrypted/obfuscated files |
+| Signature check | Authenticode verification — detects tampered signed files |
 
-**Deep Scan** — after a normal scan, click "🔬 Deep scan flagged files" to run deeper analysis on suspicious/malicious files only:
-- Full-file entropy (entire file, not just first 16KB sample)
-- String extraction — URLs, IPs, registry keys, shell commands, file paths
-- PE section analysis — names, per-section entropy, packer detection (UPX, Themida, VMProtect...)
-- SHA-256 hash lookup for all file types
+**Tiered scanning for speed:**
+
+| File type | What runs |
+|---|---|
+| `.exe`, `.dll`, `.bat`, `.ps1`… | Hash + YARA + heuristics + entropy + signature |
+| `.py`, `.php`, `.zip`, `.html`… | Heuristics only |
+| Unknown extension | PE header check (4 bytes) |
+| `.pak`, `.crp`, media, game assets | Instant skip |
+
+**Deep Scan** — after a normal scan, re-scan flagged files with:
+- Full-file entropy (entire file)
+- String extraction — URLs, IPs, registry keys, shell commands
+- PE section analysis — names, per-section entropy, packer detection
+- SHA-256 hash lookup for all types
+
+**Online Verification (VirusTotal)** — verify flagged files against 70+ antivirus engines using your free VirusTotal API key. Double-click any result to open the full VT report in browser. Free tier: 4 requests/minute.
 
 ### Settings Tab
-- Configure threads, scan depth, skip lists
-- Add custom extensions to skip (e.g. `.crp`, `.pak`, `.unity3d`)
-- Add custom folder names to skip (e.g. `Steam`, `Games`)
-- Set default tab, window size, search mode
+- **Virus Scanner** — threads, scan depth, skip media, executables only, VirusTotal API key, extra extensions/folders to skip
+- **Search** — default match mode, default search type
+- **Interface** — default tab on startup, language
 - Save / Reset to defaults
+
+---
+
+## Languages
+
+Filegu supports multiple languages. Change in **Settings → Language**, restart to apply.
+
+| Language | Status |
+|---|---|
+| English | ✅ Complete |
+| Русский | ✅ Complete |
+| Deutsch | ✅ Complete |
 
 ---
 
 ## Getting Started
 
-**Requirements:** Python 3.10 or newer. No `pip install` needed for core features.
+**Requirements:** Python 3.10+. No `pip install` needed for core features.
 
 ```bash
-# Clone the repo
-git clone https://github.com/yourusername/file-finder.git
-cd file-finder
-
-# Run
+git clone https://github.com/yourusername/filegu.git
+cd filegu
 python main.py
 ```
 
@@ -90,8 +108,8 @@ pip install yara-python
 ## Project Structure
 
 ```
-file-finder/
-├── main.py                      ← entry point
+filegu/
+├── main.py                      ← entry point, App class
 ├── config.json                  ← user settings (auto-created)
 ├── tabs/
 │   ├── search_tab.py            ← Search tab
@@ -99,57 +117,64 @@ file-finder/
 │   ├── virus_tab.py             ← Virus Scanner tab
 │   └── settings_tab.py         ← Settings tab
 ├── scanner/
-│   ├── engine.py                ← combines all scan methods
-│   ├── entropy.py               ← Shannon entropy calculation
+│   ├── engine.py                ← tiered scan pipeline
+│   ├── entropy.py               ← Shannon entropy
 │   ├── heuristics.py            ← behavioral/structural analysis
 │   ├── hash_db.py               ← local malware hash database
-│   ├── yara_engine.py           ← YARA rule matching + 9 bundled rules
-│   ├── signature.py             ← Authenticode signature verification
-│   ├── deep_scan.py             ← deep analysis engine
-│   └── data/                   ← hash database (downloaded separately)
+│   ├── yara_engine.py           ← YARA + 9 bundled rules
+│   ├── signature.py             ← Authenticode verification
+│   └── deep_scan.py             ← deep analysis engine
 └── utils/
-    ├── constants.py             ← colors, skip dirs, extension sets
+    ├── constants.py             ← colors, DEFAULT_SKIP
     ├── drives.py                ← detect drives per OS
     ├── fs_helpers.py            ← dir_size, fmt_size
     ├── search_worker.py         ← background search thread
-    ├── cache_targets.py         ← cache locations per OS
-    └── config.py                ← config manager
+    ├── cache_targets.py         ← 50+ cache locations per OS
+    ├── config.py                ← config manager (load/save)
+    ├── lang.py                  ← i18n system, t() function
+    └── virustotal.py            ← VirusTotal API helpers
 ```
 
 ---
 
-## How the Virus Scanner Works
-
-The scanner uses a **tiered approach** based on file type:
-
-- **Executables** (`.exe`, `.dll`, `.bat`, `.ps1`...) — full pipeline: hash lookup + YARA + heuristics + entropy + signature
-- **Scripts & archives** (`.py`, `.php`, `.zip`...) — heuristics only
-- **Unknown extensions** — checks for PE header mismatch (4-byte read only)
-- **Data/media/game files** (`.pak`, `.crp`, `.dat`, `.jpg`...) — instant skip
-
-This tiered design means a scan of 50,000 files completes in minutes rather than hours.
-
-**Threat scoring (0–100):**
+## Threat Scoring (0–100)
 
 | Finding | Score |
 |---|---|
 | Hash in MalwareBazaar DB | 100 (instant) |
-| YARA critical rule | +50 |
-| YARA high rule | +35 |
 | Signature tampered (hash mismatch) | +60 |
+| YARA critical rule | +50 |
 | Extension mismatch (PE in .txt) | +40 |
+| YARA high rule | +35 |
+| Script with network + exec combo | +35 |
+| Signature not trusted | +30 |
+| Entropy ≥ 7.95 (packed) | +30 |
 | Suspicious strings | up to +40 |
 | Dangerous API imports | up to +30 |
-| Entropy ≥ 7.5 (packed) | +30 |
-| Script with network + exec combo | +35 |
 
-Verdict: 0–24 = Clean · 25–59 = Suspicious · 60–100 = Malicious
+**Verdict:** 0–24 = Clean · 25–59 = Suspicious · 60–100 = Malicious
+
+---
+
+## Adding a Language
+
+Open `utils/lang.py` and add a new block to `STRINGS`:
+
+```python
+"fr": {
+    "app.subtitle": "Recherche · Suppression · Nettoyage · Analyse",
+    "tab.search":   "Recherche",
+    # ... translate all keys from the "en" block
+}
+```
+
+Then add the display name to `available_languages()`. No other changes needed.
 
 ---
 
 ## Updating the Hash Database
 
-In the Virus Scanner tab, click **⬇ Update Hash DB** to download the latest ~1 million malware SHA-256 hashes from [MalwareBazaar](https://bazaar.abuse.ch) (free, no account needed). The database is stored locally and never sent anywhere.
+In the Virus Scanner tab, click **Update Hash DB** to download ~1 million malware SHA-256 hashes from [MalwareBazaar](https://bazaar.abuse.ch) (free, no account needed). Stored locally, never sent anywhere.
 
 ---
 
