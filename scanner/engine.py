@@ -8,8 +8,15 @@
 
 from pathlib import Path
 from scanner.entropy    import file_entropy, entropy_verdict
-from scanner.heuristics import heuristic_scan, DATA_EXTENSIONS
+from scanner.heuristics import heuristic_scan, DATA_EXTENSIONS, SAFE_FILENAMES
 from scanner.hash_db    import lookup_hash, sha256_of_file, db_info
+try:
+    from scanner.signature import check_signature, SIGNABLE_EXTENSIONS
+    _SIGNATURE_AVAILABLE = True
+except ImportError:
+    _SIGNATURE_AVAILABLE = False
+    SIGNABLE_EXTENSIONS  = set()
+    def check_signature(path): return {"status": "unsupported", "signer": "", "score": 0, "message": ""}
 from scanner import yara_engine
 
 
@@ -54,6 +61,7 @@ def scan_file(path: str, skip_media: bool = True) -> dict:
         "score": 0, "hash": None, "hash_hit": False,
         "entropy": 0.0, "entropy_label": "normal",
         "yara_matches": [], "heuristics": {},
+        "signature": {"status": "unsupported", "signer": "", "score": 0, "message": ""},
         "summary": [], "size": 0,
     }
 
@@ -61,6 +69,12 @@ def scan_file(path: str, skip_media: bool = True) -> dict:
     if ext in DATA_EXTENSIONS:
         base["verdict"] = "skipped"
         base["summary"] = ["Skipped (data/media file)"]
+        return base
+
+    # ── Fast skip: known safe filenames ──────────────────────────────────────
+    if name.lower() in SAFE_FILENAMES or name.lower().startswith("api-ms-win-"):
+        base["verdict"] = "clean"
+        base["summary"] = ["Known safe system file"]
         return base
 
     # ── File size ─────────────────────────────────────────────────────────────
@@ -131,6 +145,16 @@ def scan_file(path: str, skip_media: bool = True) -> dict:
         if e_label in ("packed/encrypted", "suspicious"):
             base["score"] = min(base["score"] + (30 if e_label == "packed/encrypted" else 15), 100)
             base["summary"].append(f"Entropy: {e_desc}")
+
+    # ── 5. Signature — .exe, .dll, .msi, .ps1 etc. ───────────────────────────
+    if is_high_risk and ext in SIGNABLE_EXTENSIONS:
+        sig = check_signature(path)
+        base["signature"] = sig
+        if sig["score"] > 0:
+            base["score"] = min(base["score"] + sig["score"], 100)
+            base["summary"].append(f"Signature: {sig['message']}")
+        elif sig["status"] == "valid" and sig["signer"]:
+            base["summary"].append(f"✓ Signed by {sig['signer']}")
 
     # ── Unknown extension — light check only ──────────────────────────────────
     if not is_high_risk and not is_medium_risk:

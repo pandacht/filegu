@@ -35,6 +35,29 @@ DATA_EXTENSIONS = {
     ".uasset", ".umap", ".upk", ".rpf",
     ".bsa", ".ba2", ".vpk", ".wad", ".pk3", ".pk4",
     ".forge", ".big", ".arc", ".pac", ".res", ".bnk", ".xnb",
+    # Locale / translation files
+    ".mo", ".po",
+    # Windows API stub DLLs — always flagged, never malicious
+    "api-ms-win-",  # prefix match handled separately
+}
+
+# Known safe filenames — never flag these regardless of content
+SAFE_FILENAMES = {
+    # Windows API set stubs
+    "api-ms-win-core-memory-l1-1-0.dll",
+    "api-ms-win-core-memory-l1-1-1.dll",
+    "api-ms-win-core-memory-l1-1-2.dll",
+    # JVM debugging
+    "attach.dll",
+    # NVIDIA
+    "nvpluginwatchdog.dll",
+    # Visual Studio debuggers
+    "microsoft.pythontools.attacher.exe",
+    # Unity
+    "unityplayer.dll",
+    "gameassembly.dll",
+    # NVIDIA DLSS
+    "nvngx_dlss.dll",
 }
 
 SCRIPT_EXTENSIONS = {".ps1", ".bat", ".cmd", ".vbs", ".js", ".hta", ".wsf"}
