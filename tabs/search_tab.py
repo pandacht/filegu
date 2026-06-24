@@ -1,4 +1,4 @@
-# tabs/search_tab.py - Search tab UI and logic
+# tabs/search_tab.py — Search tab UI and logic
 
 import os
 import sys
@@ -16,6 +16,8 @@ from utils.constants import (
 )
 from utils.fs_helpers import fmt_size
 from utils.search_worker import run_search
+from utils import config as cfg
+from utils.lang import t
 
 
 class SearchTab(tk.Frame):
@@ -34,6 +36,8 @@ class SearchTab(tk.Frame):
         self._current_root_idx  = 0
         self._total_roots       = 0
         self._timer_id          = None
+        self._pending_results   = []
+        self._pending_lock      = threading.Lock()
 
         self._build(self)
         self._apply_styles()
@@ -53,7 +57,7 @@ class SearchTab(tk.Frame):
         self._build_results(right)
 
     def _build_controls(self, parent):
-        tk.Label(parent, text="SEARCH QUERY", font=("Segoe UI", 9, "bold"),
+        tk.Label(parent, text=t("search.query_label"), font=("Segoe UI", 9, "bold"),
                  bg=SURFACE, fg=MUTED).pack(anchor="w", padx=16, pady=(20, 2))
 
         self._query_var = tk.StringVar()
@@ -67,37 +71,42 @@ class SearchTab(tk.Frame):
         self._query_entry.bind("<FocusIn>",  lambda e: qf.config(highlightthickness=1))
         self._query_entry.bind("<FocusOut>", lambda e: qf.config(highlightthickness=0))
 
-        tk.Label(parent, text="MATCH MODE", font=("Segoe UI", 9, "bold"),
+        tk.Label(parent, text=t("search.match_label"), font=("Segoe UI", 9, "bold"),
                  bg=SURFACE, fg=MUTED).pack(anchor="w", padx=16, pady=(14, 4))
-        self._exact_var = tk.BooleanVar(value=False)
+        conf = cfg.load()
+        default_mode = conf["search"]["default_mode"]
+        default_type = conf["search"]["default_type"]
+        default_all  = conf["search"]["all_drives"]
+        is_exact = default_mode == "exact"
+        self._exact_var = tk.BooleanVar(value=is_exact)
         mf = tk.Frame(parent, bg=SURFACE)
         mf.pack(fill="x", padx=16)
-        self._btn_keyword = self._toggle_btn(mf, "Keyword",    lambda: self._set_mode(False), active=True)
+        self._btn_keyword = self._toggle_btn(mf, t("search.match_keyword"),    lambda: self._set_mode(False), active=not is_exact)
         self._btn_keyword.pack(side="left", fill="x", expand=True, padx=(0, 4))
-        self._btn_exact   = self._toggle_btn(mf, "Exact name", lambda: self._set_mode(True),  active=False)
+        self._btn_exact   = self._toggle_btn(mf, t("search.match_exact"), lambda: self._set_mode(True),  active=is_exact)
         self._btn_exact.pack(side="left", fill="x", expand=True)
-        tk.Label(parent, text="Keyword: 'disc' finds 'Discord'\nExact: 'discord' only finds 'discord'",
+        tk.Label(parent, text=t("search.match_hint"),
                  font=("Segoe UI", 9), bg=SURFACE, fg=MUTED, justify="left"
                  ).pack(anchor="w", padx=16, pady=(4, 0))
 
-        tk.Label(parent, text="SEARCH FOR", font=("Segoe UI", 9, "bold"),
+        tk.Label(parent, text=t("search.for_label"), font=("Segoe UI", 9, "bold"),
                  bg=SURFACE, fg=MUTED).pack(anchor="w", padx=16, pady=(14, 4))
-        self._type_var = tk.StringVar(value="both")
+        self._type_var = tk.StringVar(value=default_type)
         tf = tk.Frame(parent, bg=SURFACE)
         tf.pack(fill="x", padx=16)
-        for label, val in [("Files & folders", "both"), ("Files only", "files"), ("Folders only", "folders")]:
+        for label, val in [(t("search.for_both"), "both"), (t("search.for_files"), "files"), (t("search.for_folders"), "folders")]:
             tk.Radiobutton(tf, text=label, variable=self._type_var, value=val,
                            font=("Segoe UI", 11), bg=SURFACE, fg=TEXT, selectcolor=SURFACE2,
                            activebackground=SURFACE, activeforeground=TEXT,
                            relief="flat", bd=0).pack(anchor="w", pady=1)
 
-        tk.Label(parent, text="SEARCH IN", font=("Segoe UI", 9, "bold"),
+        tk.Label(parent, text=t("search.in_label"), font=("Segoe UI", 9, "bold"),
                  bg=SURFACE, fg=MUTED).pack(anchor="w", padx=16, pady=(14, 4))
         dsf = tk.Frame(parent, bg=SURFACE)
         dsf.pack(fill="x", padx=16)
         self._drive_vars     = {}
-        self._all_drives_var = tk.BooleanVar(value=True)
-        tk.Checkbutton(dsf, text="All drives / entire system",
+        self._all_drives_var = tk.BooleanVar(value=default_all)
+        tk.Checkbutton(dsf, text=t("search.all_drives"),
                        variable=self._all_drives_var, command=self._toggle_all_drives,
                        font=("Segoe UI", 11, "bold"), bg=SURFACE, fg=ACCENT2,
                        selectcolor=SURFACE2, activebackground=SURFACE,
@@ -120,13 +129,13 @@ class SearchTab(tk.Frame):
                                       font=("Segoe UI", 10), bg=SURFACE2, fg=TEXT,
                                       insertbackground=ACCENT, relief="flat", bd=6, state="disabled")
         self._custom_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
-        self._browse_btn = tk.Button(cf, text="Browse", command=self._browse_folder,
+        self._browse_btn = tk.Button(cf, text=t("search.btn_browse"), command=self._browse_folder,
                                      font=("Segoe UI", 10), bg=SURFACE2, fg=MUTED,
                                      relief="flat", bd=0, padx=10, cursor="hand2", state="disabled")
         self._browse_btn.pack(side="left")
 
         tk.Frame(parent, bg=SURFACE).pack(fill="y", expand=True)
-        self._search_btn = tk.Button(parent, text="Search", command=self._start_search,
+        self._search_btn = tk.Button(parent, text=t("search.btn_search"), command=self._start_search,
                                      font=("Segoe UI", 13, "bold"), bg=ACCENT, fg="white",
                                      relief="flat", bd=0, pady=12, cursor="hand2",
                                      activebackground=ACCENT2, activeforeground="white")
@@ -135,7 +144,7 @@ class SearchTab(tk.Frame):
     def _build_results(self, parent):
         status_bar = tk.Frame(parent, bg=BG)
         status_bar.pack(fill="x", pady=(0, 4))
-        self._status_var = tk.StringVar(value="Ready - enter a keyword and press Search")
+        self._status_var = tk.StringVar(value=t("search.status_ready"))
         tk.Label(status_bar, textvariable=self._status_var,
                  font=("Segoe UI", 10), bg=BG, fg=MUTED, anchor="w").pack(side="left")
         self._count_var = tk.StringVar(value="")
@@ -161,33 +170,33 @@ class SearchTab(tk.Frame):
 
         toolbar = tk.Frame(parent, bg=BG)
         toolbar.pack(fill="x", pady=(0, 6))
-        self._save_btn = tk.Button(toolbar, text="💾  Save results", command=self._save_results,
+        self._save_btn = tk.Button(toolbar, text=t("search.btn_save"), command=self._save_results,
                                    font=("Segoe UI", 10), bg=SURFACE, fg=TEXT,
                                    relief="flat", bd=0, padx=12, pady=6, cursor="hand2", state="disabled")
         self._save_btn.pack(side="left", padx=(0, 8))
-        tk.Button(toolbar, text="✕  Clear", command=self._clear_results,
+        tk.Button(toolbar, text=t("search.btn_clear"), command=self._clear_results,
                   font=("Segoe UI", 10), bg=SURFACE, fg=MUTED,
                   relief="flat", bd=0, padx=12, pady=6, cursor="hand2").pack(side="left")
-        self._stop_btn = tk.Button(toolbar, text="⏹  Stop", command=self._stop_search,
+        self._stop_btn = tk.Button(toolbar, text=t("search.btn_stop"), command=self._stop_search,
                                    font=("Segoe UI", 10), bg=SURFACE, fg=DANGER,
                                    relief="flat", bd=0, padx=12, pady=6, cursor="hand2", state="disabled")
         self._stop_btn.pack(side="right")
-        self._delete_btn = tk.Button(toolbar, text="🗑  Delete selected", command=self._delete_selected,
+        self._delete_btn = tk.Button(toolbar, text=t("search.btn_delete"), command=self._delete_selected,
                                      font=("Segoe UI", 10), bg=SURFACE, fg=DANGER,
                                      relief="flat", bd=0, padx=12, pady=6, cursor="hand2", state="disabled")
         self._delete_btn.pack(side="right", padx=(0, 8))
 
         tree_frame = tk.Frame(parent, bg=BG)
         tree_frame.pack(fill="both", expand=True)
-        scrollbar = tk.Scrollbar(tree_frame)
+        scrollbar = ttk.Scrollbar(tree_frame)
         scrollbar.pack(side="right", fill="y")
         self._tree = ttk.Treeview(tree_frame, columns=("type", "name", "path", "size"),
                                    show="headings", yscrollcommand=scrollbar.set, selectmode="browse")
         scrollbar.config(command=self._tree.yview)
-        self._tree.heading("type", text="Type")
-        self._tree.heading("name", text="Name")
-        self._tree.heading("path", text="Full path")
-        self._tree.heading("size", text="Size")
+        self._tree.heading("type", text=t("search.col_type"))
+        self._tree.heading("name", text=t("search.col_name"))
+        self._tree.heading("path", text=t("search.col_path"))
+        self._tree.heading("size", text=t("search.col_size"))
         self._tree.column("type", width=70,  minwidth=60,  stretch=False)
         self._tree.column("name", width=200, minwidth=120, stretch=False)
         self._tree.column("path", width=500, minwidth=200, stretch=True)
@@ -205,11 +214,24 @@ class SearchTab(tk.Frame):
         self._tree.tag_configure("file",   foreground=FILE_C)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+    def on_tab_shown(self):
+        """Called when this tab becomes visible — reload config defaults."""
+        conf = cfg.load()
+        is_exact     = conf["search"]["default_mode"] == "exact"
+        default_type = conf["search"]["default_type"]
+        default_all  = conf["search"]["all_drives"]
+        self._exact_var.set(is_exact)
+        self._set_mode(is_exact)
+        self._type_var.set(default_type)
+        self._all_drives_var.set(default_all)
+        self._toggle_all_drives()
+
     def _toggle_btn(self, parent, text, cmd, active=False):
-        return tk.Button(parent, text=text, command=cmd, font=("Segoe UI", 10),
+        return tk.Button(parent, text=text, command=cmd, font=("Segoe UI", 9),
                          bg=ACCENT if active else SURFACE2,
                          fg="white" if active else MUTED,
-                         relief="flat", bd=0, pady=6, cursor="hand2")
+                         relief="flat", bd=0, pady=7, cursor="hand2",
+                         wraplength=115, justify="center")
 
     def _set_mode(self, exact):
         self._exact_var.set(exact)
@@ -248,18 +270,18 @@ class SearchTab(tk.Frame):
     def _fmt_elapsed(seconds):
         seconds = int(seconds)
         if seconds < 60:
-            return f"{seconds}s elapsed"
+            return f"{seconds}s"
         m, s = divmod(seconds, 60)
         if m < 60:
-            return f"{m}m {s:02d}s elapsed"
+            return f"{m}m {s:02d}s"
         h, m = divmod(m, 60)
-        return f"{h}h {m:02d}m elapsed"
+        return f"{h}h {m:02d}m"
 
     # ── Search ────────────────────────────────────────────────────────────────
     def _start_search(self):
         query = self._query_var.get().strip()
         if not query:
-            messagebox.showwarning("No keyword", "Please enter at least one keyword.")
+            messagebox.showwarning("No keyword", t("search.no_keyword"))
             return
         if self._search_thread and self._search_thread.is_alive():
             self._stop_search()
@@ -272,12 +294,14 @@ class SearchTab(tk.Frame):
         self._total_roots       = len(roots)
         self._search_start_time = time.time()
 
-        self._status_var.set(f"Searching {len(roots)} location(s)…")
+        self._status_var.set(f"{t('search.status_scanning', n=len(roots))}")
         self._pct_var.set("0%")
-        self._elapsed_var.set("0s elapsed")
+        self._elapsed_var.set(t("search.elapsed_zero"))
         self._search_btn.config(state="disabled")
         self._stop_btn.config(state="normal")
         self._progress["value"] = 0
+        self._pending_results = []
+        self._pending_lock    = threading.Lock()
         self._tick_timer()
 
         self._search_thread = threading.Thread(
@@ -287,54 +311,71 @@ class SearchTab(tk.Frame):
                   self._on_progress, self._stop_event),
             daemon=True)
         self._search_thread.start()
+        self._app.after(100, self._flush_results)
 
-    def _stop_search(self):
-        self._stop_event.set()
-        self._status_var.set("Stopping…")
+    def _flush_results(self):
+        """Drain up to 100 pending results — called every 100ms."""
+        with self._pending_lock:
+            batch = self._pending_results[:100]
+            del self._pending_results[:100]
+
+        for kind, name, path, size in batch:
+            icon     = t("search.type_folder") if kind == "folder" else t("search.type_file")
+            size_str = fmt_size(size) if size is not None else ""
+            iid      = self._tree.insert("", "end",
+                                          values=(icon, name, path, size_str),
+                                          tags=(kind,))
+            self._result_count += 1
+            self._results.append({"type": kind, "name": name, "path": path, "size": size})
+
+        if batch:
+            self._count_var.set(f"{t('search.status_results', n=self._result_count)}")
+            self._tree.see(self._tree.get_children()[-1])
+
+        if self._pending_results or self._search_thread.is_alive():
+            self._app.after(100, self._flush_results)
+
+    def _stop_timer(self):
         if self._timer_id:
             self._app.after_cancel(self._timer_id)
             self._timer_id = None
 
+    def _stop_search(self):
+        self._stop_event.set()
+        self._stop_timer()
+        self._status_var.set("Stopping…")
+
     def _on_progress(self, root_idx, total_roots, dirs_in_root, current_path):
-        self._app.after(0, self._update_progress, root_idx, total_roots, dirs_in_root, current_path)
+        self._dirs_scanned += 1
+        # Only update UI every 200 directories
+        if self._dirs_scanned % 200 == 0:
+            self._app.after(0, self._update_progress,
+                            root_idx, total_roots, dirs_in_root, current_path)
 
     def _update_progress(self, root_idx, total_roots, dirs_in_root, current_path):
         self._current_root_idx = root_idx
-        self._dirs_scanned    += 1
         drive_progress = root_idx / total_roots
         within         = (1 - (1 / (1 + dirs_in_root / 800))) * 0.95
         pct            = min(int((drive_progress + within / total_roots) * 100), 99)
         self._progress["value"] = pct
-        self._pct_var.set(f"{pct}%  (drive {root_idx + 1}/{total_roots})")
-        self._dirs_var.set(f"{self._dirs_scanned:,} dirs scanned")
+        self._pct_var.set(f"{pct}%  ({t('search.drive_progress', i=root_idx+1, n=total_roots)})")
+        self._dirs_var.set(f"{t('search.dirs_scanned', n=self._dirs_scanned):}")
         self._curpath_var.set(current_path if len(current_path) <= 80 else "…" + current_path[-77:])
 
     def _tick_timer(self):
-        if not self._stop_event.is_set() and self._search_thread and self._search_thread.is_alive():
-            self._elapsed_var.set(self._fmt_elapsed(time.time() - self._search_start_time))
-            self._timer_id = self._app.after(1000, self._tick_timer)
+        elapsed = time.time() - self._search_start_time
+        self._elapsed_var.set(self._fmt_elapsed(elapsed))
+        self._timer_id = self._app.after(1000, self._tick_timer)
 
     def _on_result(self, kind, name, path, size):
-        self._app.after(0, self._add_row, kind, name, path, size)
-
-    def _add_row(self, kind, name, path, size):
-        icon     = "📁" if kind == "folder" else "📄"
-        size_str = fmt_size(size) if size is not None else ""
-        iid      = self._tree.insert("", "end",
-                                      values=(f"{icon} {kind.capitalize()}", name, path, size_str),
-                                      tags=(kind,))
-        self._result_count += 1
-        self._results.append({"type": kind, "name": name, "path": path, "size": size})
-        self._count_var.set(f"{self._result_count} found")
-        self._tree.see(iid)
+        with self._pending_lock:
+            self._pending_results.append((kind, name, path, size))
 
     def _on_done(self, total):
         self._app.after(0, self._finish_search, total)
 
     def _finish_search(self, total):
-        if self._timer_id:
-            self._app.after_cancel(self._timer_id)
-            self._timer_id = None
+        self._stop_timer()
         elapsed     = time.time() - self._search_start_time
         elapsed_str = self._fmt_elapsed(elapsed).replace(" elapsed", "")
         self._progress["value"] = 100
@@ -342,10 +383,10 @@ class SearchTab(tk.Frame):
         self._stop_btn.config(state="disabled")
         if total > 0:
             self._save_btn.config(state="normal")
-        msg = "Search stopped" if self._stop_event.is_set() else "Search complete"
-        self._status_var.set(f"{msg} - {total} result(s) found")
+        msg = t("search.status_stopped") if self._stop_event.is_set() else t("search.status_complete")
+        self._status_var.set(f"{msg} — {t('search.status_results', n=total)}")
         self._count_var.set(f"{total} results")
-        self._elapsed_var.set(f"took {elapsed_str}")
+        self._elapsed_var.set(f"{t('search.took', t=elapsed_str)}")
         self._pct_var.set("100%" if not self._stop_event.is_set() else
                           f"{int(self._current_root_idx / max(self._total_roots, 1) * 100)}%")
         self._curpath_var.set("")
@@ -362,7 +403,7 @@ class SearchTab(tk.Frame):
         self._dirs_var.set("")
         self._curpath_var.set("")
         self._progress["value"] = 0
-        self._status_var.set("Ready - enter a keyword and press Search")
+        self._status_var.set(t("search.status_ready"))
         self._save_btn.config(state="disabled")
         self._delete_btn.config(state="disabled")
 
@@ -403,7 +444,7 @@ class SearchTab(tk.Frame):
         self._delete_item(sel[0], values[2], values[0])
 
     def _delete_item(self, iid, path, type_label):
-        is_folder = "Folder" in type_label
+        is_folder = t("search.type_folder") in type_label
         kind_word = "folder and ALL its contents" if is_folder else "file"
         if not messagebox.askyesno("Confirm delete",
                                    f"Permanently delete this {kind_word}?\n\n{path}\n\nThis cannot be undone.",
