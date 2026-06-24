@@ -22,8 +22,10 @@ DEFAULT_SKIP = {
     ".Spotlight-V100", ".Trashes", ".fseventsd",
     # Linux
     "proc", "sys", "dev",
-    # Dev noise
+    # Dev tools / package managers
     "node_modules", "__pycache__", ".git", ".svn", "venv", ".venv",
+    "chocolatey",                            # Chocolatey package manager scripts
+    ".p2",                                   # Eclipse plugin pool
     # Game launchers & stores
     "SteamLibrary", "steamapps",
     "Ubisoft Game Launcher", "Ubisoft Connect",
@@ -35,16 +37,11 @@ DEFAULT_SKIP = {
     "Xbox",
     # Anti-cheat (always packed/obfuscated by design)
     "BattlEye", "BattlEye Installer",
-    "EasyAntiCheat",
-    "EasyAntiCheat_EOS",
-    "AntiCheat",
-    "PunkBuster",
-    "Vanguard",
-    "GameGuard",
-    # Game engines / runtimes (packed assets)
-    "PhyreEngine",
-    "Unreal Engine",
-    "Unity",
+    "EasyAntiCheat", "EasyAntiCheat_EOS",
+    "AntiCheat", "PunkBuster",
+    "Vanguard", "GameGuard",
+    # Game engines / runtimes
+    "PhyreEngine", "Unreal Engine", "Unity",
 }
 
 # ── VirusTotal — file extensions ──────────────────────────────────────────────

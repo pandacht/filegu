@@ -12,11 +12,12 @@ CONFIG_FILE = Path(__file__).parent.parent / "config.json"
 DEFAULTS = {
     "scanner": {
         "threads":         8,
-        "depth":           "full",       # "full" | "3" | "1"
+        "depth":           "full",
         "skip_media":      True,
         "exe_only":        False,
-        "extra_skip_ext":  [],           # user-defined extra extensions to skip e.g. [".crp", ".pak"]
-        "extra_skip_dirs": [],           # user-defined extra dirs to skip   e.g. ["Steam", "Games"]
+        "extra_skip_ext":  [],
+        "extra_skip_dirs": [],
+        "virustotal_key":  "",
     },
     "search": {
         "default_mode":    "keyword",    # "keyword" | "exact"
@@ -24,9 +25,10 @@ DEFAULTS = {
         "all_drives":      True,
     },
     "ui": {
-        "default_tab":     "Search",     # "Search" | "Cache Cleaner" | "Virus Scanner"
-        "window_width":    980,
-        "window_height":   720,
+        "default_tab":     "Search",
+        "window_width":    1280,
+        "window_height":   820,
+        "language":        "en",
     }
 }
 
