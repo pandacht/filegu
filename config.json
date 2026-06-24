@@ -5,7 +5,8 @@
     "skip_media": true,
     "exe_only": false,
     "extra_skip_ext": [],
-    "extra_skip_dirs": ["SteamLibrary", "Ubisoft Game Launcher", "BattlEye", "EasyAntiCheat"]
+    "extra_skip_dirs": [],
+    "virustotal_key": ""
   },
   "search": {
     "default_mode": "keyword",
@@ -14,7 +15,8 @@
   },
   "ui": {
     "default_tab": "Search",
-    "window_width": 980,
-    "window_height": 720
+    "window_width": 1280,
+    "window_height": 820,
+    "language": "ru"
   }
 }
