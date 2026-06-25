@@ -17,8 +17,7 @@ from utils import config as cfg
 from utils.lang import t
 from utils.virustotal import vt_lookup_hash, vt_parse_result
 from scanner.engine  import scan_file
-from scanner.hash_db import db_info, update_database
-from scanner         import yara_engine
+from scanner.hash_db import update_database
 
 
 class VirusTab(tk.Frame):
@@ -39,30 +38,18 @@ class VirusTab(tk.Frame):
         self._scan_done_total = 0
         self._scan_total      = [0]
         self._vt_key_var      = tk.StringVar()
+        self._pending_auto_vt = False
+        self._auto_vt_var     = tk.BooleanVar(value=False)
+        self._auto_deepscan_var = tk.BooleanVar(value=False)
 
         self._build(self)
-        self._refresh_db_info()
+        # Auto-update hash DB in background on startup
+        threading.Thread(target=self._silent_update_db, daemon=True).start()
+        # Clean old reports on startup
+        self._cleanup_old_reports()
 
     # ── Layout ────────────────────────────────────────────────────────────────
     def _build(self, parent):
-        # ── Top info bar ──
-        info_bar = tk.Frame(parent, bg=SURFACE2)
-        info_bar.pack(fill="x")
-
-        self._db_var = tk.StringVar(value="Checking database…")
-        tk.Label(info_bar, textvariable=self._db_var,
-                 font=("Segoe UI", 10), bg=SURFACE2, fg=MUTED).pack(side="left", padx=16, pady=8)
-
-        self._yara_var = tk.StringVar(value="")
-        tk.Label(info_bar, textvariable=self._yara_var,
-                 font=("Segoe UI", 10), bg=SURFACE2, fg=MUTED).pack(side="left", padx=(0, 16))
-
-        tk.Button(info_bar, text=t("virus.btn_update_db"),
-                  command=self._update_db,
-                  font=("Segoe UI", 10), bg=SURFACE, fg=TEXT,
-                  relief="flat", bd=0, padx=12, pady=6, cursor="hand2"
-                  ).pack(side="right", padx=12, pady=6)
-
         # ── Scan target ──
         body = tk.Frame(parent, bg=BG)
         body.pack(fill="both", expand=True, padx=20, pady=12)
@@ -131,6 +118,38 @@ class VirusTab(tk.Frame):
         # Separator
         tk.Frame(parent, bg=SURFACE2, height=1).pack(fill="x", padx=16, pady=(12, 8))
 
+        # Auto deep scan option
+        self._auto_deepscan_var = tk.BooleanVar(value=False)
+        self._auto_deepscan_cb  = tk.Checkbutton(
+            parent, text=t("virus.auto_deepscan"),
+            variable=self._auto_deepscan_var,
+            command=self._on_auto_toggle,
+            font=("Segoe UI", 10), bg=SURFACE, fg=TEXT,
+            selectcolor=SURFACE2, activebackground=SURFACE,
+            activeforeground=TEXT, relief="flat"
+        )
+        self._auto_deepscan_cb.pack(anchor="w", padx=16, pady=(0, 2))
+
+        # Auto VT option (indented, only relevant when auto deep scan is on)
+        self._auto_vt_var = tk.BooleanVar(value=False)
+        self._auto_vt_cb  = tk.Checkbutton(
+            parent, text=t("virus.auto_vt"),
+            variable=self._auto_vt_var,
+            font=("Segoe UI", 9), bg=SURFACE, fg=MUTED,
+            selectcolor=SURFACE2, activebackground=SURFACE,
+            activeforeground=TEXT, relief="flat",
+            wraplength=170, justify="left",
+            state="disabled"
+        )
+        self._auto_vt_cb.pack(anchor="w", padx=28, pady=(0, 0))
+
+        self._auto_vt_hint = tk.Label(
+            parent, text=t("virus.auto_vt_hint"),
+            font=("Segoe UI", 8), bg=SURFACE, fg=MUTED,
+            wraplength=170, justify="left"
+        )
+        self._auto_vt_hint.pack(anchor="w", padx=28, pady=(0, 6))
+
         # Spacer + scan button
         tk.Frame(parent, bg=SURFACE).pack(fill="y", expand=True)
 
@@ -166,14 +185,6 @@ class VirusTab(tk.Frame):
                                    font=("Segoe UI", 10), bg=SURFACE, fg=DANGER,
                                    relief="flat", bd=0, padx=12, pady=8, cursor="hand2", state="disabled")
         self._stop_btn.pack(side="left")
-        self._save_btn = tk.Button(toolbar, text=t("virus.btn_save"),
-                                   command=self._save_report,
-                                   font=("Segoe UI", 10), bg=SURFACE, fg=TEXT,
-                                   relief="flat", bd=0, padx=12, pady=8, cursor="hand2", state="disabled")
-        self._save_btn.pack(side="left", padx=(8, 0))
-        tk.Button(toolbar, text=t("virus.btn_clear"), command=self._clear,
-                  font=("Segoe UI", 10), bg=SURFACE, fg=MUTED,
-                  relief="flat", bd=0, padx=12, pady=8, cursor="hand2").pack(side="left", padx=(8, 0))
         self._deepscan_btn = tk.Button(
             toolbar, text=t("virus.btn_deepscan"),
             command=self._start_deep_scan,
@@ -310,33 +321,99 @@ class VirusTab(tk.Frame):
 
         selected = [d for d, v in self._drive_vars.items() if v.get()]
         return selected if selected else []
-    def _refresh_db_info(self):
-        info = db_info()
-        if info["exists"]:
-            upd = f"  ·  updated {info['updated']}" if info["updated"] else ""
-            self._db_var.set(t("virus.hash_db", n=f"{info['count']:,}", date=info['updated'] or ""))
+    def _silent_update_db(self):
+        """Update hash DB silently in background on startup."""
+        try:
+            from scanner.hash_db import update_database
+            ok, _ = update_database()
+        except Exception:
+            pass
+
+    def _cleanup_old_reports(self):
+        """Delete report files older than 7 days."""
+        import time as _time
+        reports_dir = Path(__file__).parent.parent / "reports"
+        reports_dir.mkdir(exist_ok=True)
+        cutoff = _time.time() - 7 * 24 * 3600
+        try:
+            for f in reports_dir.glob("*.txt"):
+                if f.stat().st_mtime < cutoff:
+                    f.unlink()
+        except Exception:
+            pass
+
+    def _auto_save_report(self, suffix: str = ""):
+        """Save report automatically to reports/ folder."""
+        import time as _time
+        if not self._results:
+            return
+        reports_dir = Path(__file__).parent.parent / "reports"
+        reports_dir.mkdir(exist_ok=True)
+        ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
+        name = f"scan_report_{ts}{suffix}.txt"
+        path = reports_dir / name
+        self._write_report(str(path))
+
+    def _write_report(self, path: str):
+        """Write report to a given path."""
+        mal  = [r for r in self._results if r["verdict"] == "malicious"]
+        susp = [r for r in self._results if r["verdict"] == "suspicious"]
+        cln  = [r for r in self._results if r["verdict"] == "clean"]
+        skip = [r for r in self._results if r["verdict"] == "skipped"]
+
+        if self._file_var.get().strip():
+            target_desc = self._file_var.get().strip()
+        elif self._all_drives_var.get():
+            target_desc = "All drives"
         else:
-            self._db_var.set(t("virus.hash_db_none"))
+            selected = [d for d, v in self._drive_vars.items() if v.get()]
+            target_desc = ", ".join(selected) if selected else "Unknown"
 
-        if yara_engine.is_available():
-            self._yara_var.set(t("virus.yara_active"))
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(f"Local Virus Scanner Report\n{'='*60}\n")
+                f.write(f"Date:       {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Target:     {target_desc}\n")
+                f.write(f"Scanned:    {len(self._results) - len(skip)}\n")
+                f.write(f"Malicious:  {len(mal)}\n")
+                f.write(f"Suspicious: {len(susp)}\n")
+                f.write(f"Clean:      {len(cln)}\n\n")
+                for section, items in [
+                    ("🔴 MALICIOUS", mal),
+                    ("🟡 SUSPICIOUS", susp),
+                    ("🟢 CLEAN", cln),
+                ]:
+                    if items:
+                        f.write(f"{section} ({len(items)})\n{'-'*60}\n")
+                        for r in items:
+                            f.write(f"  File:    {r['name']}\n")
+                            f.write(f"  Path:    {r['path']}\n")
+                            f.write(f"  Score:   {r['score']}/100\n")
+                            entropy = r.get('entropy_full') or r.get('entropy', 0)
+                            f.write(f"  Entropy: {entropy:.4f}\n")
+                            if r.get("hash"):
+                                f.write(f"  SHA-256: {r['hash']}\n")
+                            for s in r.get("summary", []):
+                                f.write(f"  → {s}\n")
+                            f.write("\n")
+        except Exception as e:
+            pass
+
+    def _on_auto_toggle(self):
+        """Enable VT checkbox only when auto deep scan is checked."""
+        if self._auto_deepscan_var.get():
+            self._auto_vt_cb.config(state="normal", fg=TEXT)
+            # Hide manual buttons in auto mode
+            self._deepscan_btn.config(state="disabled")
+            self._vt_verify_btn.config(state="disabled")
         else:
-            self._yara_var.set(t("virus.yara_missing"))
-
-    def _update_db(self):
-        self._db_var.set("Downloading…")
-
-        def worker():
-            ok, msg = update_database(
-                progress_cb=lambda m: self._app.after(0, self._db_var.set, m)
-            )
-            def finish():
-                self._refresh_db_info()
-                if not ok:
-                    messagebox.showerror("Update failed", msg)
-            self._app.after(0, finish)
-
-        threading.Thread(target=worker, daemon=True).start()
+            self._auto_vt_var.set(False)
+            self._auto_vt_cb.config(state="disabled", fg=MUTED)
+            # Re-enable manual buttons if there are flagged results
+            flagged = [r for r in self._results if r["verdict"] in ("malicious", "suspicious")]
+            if flagged:
+                self._deepscan_btn.config(state="normal")
+                self._vt_verify_btn.config(state="normal")
 
     # ── Lock / unlock all settings during scan ────────────────────────────────
     def _lock_controls(self):
@@ -345,6 +422,8 @@ class VirusTab(tk.Frame):
             cb.config(state="disabled")
         self._file_entry.config(state="disabled")
         self._browse_btn.config(state="disabled")
+        self._auto_deepscan_cb.config(state="disabled")
+        self._auto_vt_cb.config(state="disabled")
 
     def _unlock_controls(self):
         self._all_drives_cb.config(state="normal")
@@ -353,6 +432,10 @@ class VirusTab(tk.Frame):
                 cb.config(state="normal")
         self._file_entry.config(state="normal")
         self._browse_btn.config(state="normal")
+        self._auto_deepscan_cb.config(state="normal")
+        # VT checkbox only re-enables if auto deep scan is on
+        if self._auto_deepscan_var.get():
+            self._auto_vt_cb.config(state="normal")
 
     # ── Timer ─────────────────────────────────────────────────────────────────
     def _fmt_elapsed(self, seconds: float) -> str:
@@ -450,6 +533,16 @@ class VirusTab(tk.Frame):
             messagebox.showwarning(t("common.warning"),
                                    "Select at least one drive, or browse to a single file.")
             return
+
+        # If auto VT is enabled, check for API key before starting
+        if self._auto_deepscan_var.get() and self._auto_vt_var.get():
+            if not self._vt_key_var.get().strip():
+                self._switch_result_tab("vt")
+                messagebox.showwarning(
+                    t("virus.no_key"),
+                    t("virus.auto_vt_no_key")
+                )
+                return
 
         self._clear()
         self._stop.clear()
@@ -617,11 +710,6 @@ class VirusTab(tk.Frame):
         else:
             self._app.after(0, self._finish_scan, self._scan_done_total)
 
-    def _update_scan_progress(self, result, done, total):
-        self._add_row(result, done, total)
-        self._count_var.set(f"{done:,} / {total:,}")
-        self._progress["value"] = done
-
     def _finish_scan(self, total):
         # Short delay so timer gets one final tick before we cancel it
         self._app.after(1100, self._finish_scan_final, total)
@@ -650,12 +738,32 @@ class VirusTab(tk.Frame):
         self._scan_btn.config(state="normal")
         self._stop_btn.config(state="disabled")
         self._unlock_controls()
-        if self._results:
-            self._save_btn.config(state="normal")
+        # Auto-save report after normal scan
+        suffix = "_deepscan" if getattr(self, "_is_deep_scan", False) else "_scan"
+        self._is_deep_scan = False
+        self._auto_save_report(suffix)
         flagged = [r for r in self._results if r["verdict"] in ("malicious", "suspicious")]
         if flagged and not self._stop.is_set():
-            self._deepscan_btn.config(state="normal")
-            self._vt_verify_btn.config(state="normal")
+            # Only enable manual buttons if auto mode is off
+            if not self._auto_deepscan_var.get():
+                self._deepscan_btn.config(state="normal")
+                self._vt_verify_btn.config(state="normal")
+            if self._auto_deepscan_var.get():
+                if self._auto_vt_var.get():
+                    self._app.after(500, self._auto_scan_sequence)
+                else:
+                    self._app.after(500, self._start_deep_scan)
+
+        # Trigger VT if auto sequence was running
+        if getattr(self, "_pending_auto_vt", False) and not self._stop.is_set():
+            self._pending_auto_vt = False
+            self._app.after(500, self._start_vt_verify)
+
+    def _auto_scan_sequence(self):
+        """Called when auto deep scan + auto VT is enabled.
+        Starts deep scan; VT runs automatically when deep scan finishes."""
+        self._pending_auto_vt = True
+        self._start_deep_scan()
 
     # ── Online Verification (VirusTotal) ──────────────────────────────────────
     def _build_vt_tab(self, parent):
@@ -806,6 +914,7 @@ class VirusTab(tk.Frame):
                 self._vt_status_var.set(f"Online verification complete — {total} file(s) checked")
                 self._vt_verify_btn.config(state="normal")
                 self._vt_progress["value"] = total
+                self._auto_save_report("_virustotal")
             self._app.after(0, finish)
 
         threading.Thread(target=worker, daemon=True).start()
@@ -883,7 +992,6 @@ class VirusTab(tk.Frame):
 
         # UI setup
         self._deepscan_btn.config(state="disabled")
-        self._save_btn.config(state="disabled")
         self._scan_btn.config(state="disabled")
         self._lock_controls()
         self._progress.config(mode="determinate", maximum=total)
@@ -943,6 +1051,7 @@ class VirusTab(tk.Frame):
         self._scan_done_flag  = False
         self._scan_done_total = 0
         self._scan_total      = [total]
+        self._is_deep_scan    = True
         self._thread = threading.Thread(target=worker, daemon=True)
         self._thread.start()
         self._app.after(100, self._flush_deep_results)
@@ -1060,7 +1169,6 @@ class VirusTab(tk.Frame):
         self._status_var.set(t("virus.status_ready"))
         self._count_var.set("")
         self._elapsed_var.set("")
-        self._save_btn.config(state="disabled")
         self._deepscan_btn.config(state="disabled")
         self._vt_verify_btn.config(state="disabled")
 
@@ -1223,62 +1331,3 @@ class VirusTab(tk.Frame):
         self._app.clipboard_append(text)
 
     # ── Save report ───────────────────────────────────────────────────────────
-    def _save_report(self):
-        if not self._results:
-            return
-        ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[("Text file", "*.txt"), ("All files", "*.*")],
-            initialfile=f"scan_report_{ts}.txt", title="Save report"
-        )
-        if not path:
-            return
-
-        mal  = [r for r in self._results if r["verdict"] == "malicious"]
-        susp = [r for r in self._results if r["verdict"] == "suspicious"]
-        cln  = [r for r in self._results if r["verdict"] == "clean"]
-        skip = [r for r in self._results if r["verdict"] == "skipped"]
-
-        # Build target description from current drive selection
-        if self._file_var.get().strip():
-            target_desc = self._file_var.get().strip()
-        elif self._all_drives_var.get():
-            target_desc = t("virus.all_drives")
-        else:
-            selected = [d for d, v in self._drive_vars.items() if v.get()]
-            target_desc = ", ".join(selected) if selected else "Unknown"
-
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(f"Local Virus Scanner Report\n{'='*60}\n")
-                f.write(f"Date:       {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"Target:     {target_desc}\n")
-                f.write(f"Scanned:    {len(self._results) - len(skip)}\n")
-                f.write(f"Malicious:  {len(mal)}\n")
-                f.write(f"Suspicious: {len(susp)}\n")
-                f.write(f"Clean:      {len(cln)}\n\n")
-
-                for section, items in [
-                    ("🔴 MALICIOUS", mal),
-                    ("🟡 SUSPICIOUS", susp),
-                    ("🟢 CLEAN", cln),
-                ]:
-                    if items:
-                        f.write(f"{section} ({len(items)})\n{'-'*60}\n")
-                        for r in items:
-                            f.write(f"  File:    {r['name']}\n")
-                            f.write(f"  Path:    {r['path']}\n")
-                            f.write(f"  Score:   {r['score']}/100\n")
-                            entropy = r.get('entropy_full') or r.get('entropy', 0)
-                            entropy_label = r.get('entropy_label', 'full scan' if r.get('entropy_full') else 'normal')
-                            f.write(f"  Entropy: {entropy:.4f} ({entropy_label})\n")
-                            if r["hash"]:
-                                f.write(f"  SHA-256: {r['hash']}\n")
-                            for s in r["summary"]:
-                                f.write(f"  → {s}\n")
-                            f.write("\n")
-
-            messagebox.showinfo("Saved", f"Report saved to:\n{path}")
-        except Exception as e:
-            messagebox.showerror("Save failed", f"Could not save report:\n{e}")
