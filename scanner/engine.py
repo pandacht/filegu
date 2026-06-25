@@ -19,9 +19,6 @@ except ImportError:
     def check_signature(path): return {"status": "unsupported", "signer": "", "score": 0, "message": ""}
 from scanner import yara_engine
 
-
-MAX_SCAN_SIZE = 50 * 1024 * 1024  # 50 MB
-
 # Only these get the full treatment (hash + YARA + heuristics + entropy)
 HIGH_RISK_EXT = {
     ".exe", ".dll", ".bat", ".cmd", ".ps1", ".vbs", ".js",
@@ -45,11 +42,6 @@ def _get_db_info():
     if _db_info_cache is None:
         _db_info_cache = db_info()
     return _db_info_cache
-
-def invalidate_db_cache():
-    global _db_info_cache
-    _db_info_cache = None
-
 
 def scan_file(path: str, skip_media: bool = True) -> dict:
     p    = Path(path)

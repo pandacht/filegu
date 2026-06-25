@@ -17,7 +17,6 @@ from utils import config as cfg
 from utils.lang import t
 from utils.virustotal import vt_lookup_hash, vt_parse_result
 from scanner.engine  import scan_file
-from scanner.hash_db import update_database
 
 
 class VirusTab(tk.Frame):
@@ -344,7 +343,6 @@ class VirusTab(tk.Frame):
 
     def _auto_save_report(self, suffix: str = ""):
         """Save report automatically to reports/ folder."""
-        import time as _time
         if not self._results:
             return
         reports_dir = Path(__file__).parent.parent / "reports"
@@ -503,29 +501,6 @@ class VirusTab(tk.Frame):
         ".jar", ".msi", ".scr", ".pif", ".com", ".lnk", ".reg",
         ".hta", ".wsf", ".cpl", ".ocx",
     }
-
-    def _collect_files(self, roots: list[str]) -> list[str]:
-        conf       = cfg.load()
-        exe_only   = conf["scanner"]["exe_only"]
-        extra_ext  = set(conf["scanner"]["extra_skip_ext"])
-        extra_dirs = set(conf["scanner"]["extra_skip_dirs"])
-        skip_dirs  = DEFAULT_SKIP | extra_dirs
-
-        files = []
-        for root in roots:
-            if os.path.isfile(root):
-                files.append(root)
-                continue
-            for dirpath, dirnames, filenames in os.walk(root):
-                dirnames[:] = [d for d in dirnames if d not in skip_dirs]
-                for fname in filenames:
-                    ext = Path(fname).suffix.lower()
-                    if ext in extra_ext:
-                        continue
-                    if exe_only and ext not in self._EXE_ONLY_EXT:
-                        continue
-                    files.append(os.path.join(dirpath, fname))
-        return files
 
     def _start_scan(self):
         targets = self._get_targets()

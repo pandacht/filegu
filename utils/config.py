@@ -4,7 +4,6 @@
 # All settings have sensible defaults so the app works even without a config file.
 
 import json
-import os
 from pathlib import Path
 
 CONFIG_FILE = Path(__file__).parent.parent / "config.json"
@@ -77,22 +76,6 @@ def get(key_path: str, fallback=None):
                     return fallback
             return node
     return node
-
-
-def set_value(key_path: str, value) -> bool:
-    """
-    Set a single value by dot-path and save immediately.
-    e.g. set_value("scanner.threads", 4)
-    """
-    config = load()
-    keys   = key_path.split(".")
-    node   = config
-    for k in keys[:-1]:
-        if k not in node:
-            node[k] = {}
-        node = node[k]
-    node[keys[-1]] = value
-    return save(config)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

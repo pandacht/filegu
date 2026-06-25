@@ -69,19 +69,3 @@ DEFAULT_SKIP = {
     # Game engines
     "PhyreEngine", "Unreal Engine", "Unity",
 }
-
-# ── VirusTotal — file extensions ──────────────────────────────────────────────
-# Almost never dangerous; skip to save API quota (except archives)
-SAFE_EXTENSIONS = {
-    ".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml",
-    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg", ".ico", ".webp",
-    ".mp3", ".mp4", ".wav", ".flac", ".ogg", ".mkv", ".avi", ".mov",
-    ".ttf", ".otf", ".woff", ".woff2",
-    ".zip", ".tar", ".gz", ".7z", ".rar",  # archives can hide malware — still checked
-}
-
-# High-risk extensions worth scanning first
-RISKY_EXTENSIONS = {
-    ".exe", ".dll", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".jar",
-    ".msi", ".scr", ".pif", ".com", ".lnk", ".reg", ".hta", ".wsf",
-}

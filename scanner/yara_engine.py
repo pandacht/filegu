@@ -236,9 +236,3 @@ def scan_file(path: str) -> list[dict]:
             "severity":    meta.get("severity", "medium"),
         })
     return results
-
-
-def reload_rules():
-    """Force recompile rules (call after adding new .yar files)."""
-    global _compiled_rules
-    _compiled_rules = None

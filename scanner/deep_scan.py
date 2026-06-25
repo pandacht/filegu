@@ -13,7 +13,7 @@ import re
 import struct
 from pathlib import Path
 
-from scanner.hash_db    import lookup_hash, sha256_of_file, db_info
+from scanner.hash_db    import lookup_hash, db_info
 try:
     from scanner.signature import check_signature, SIGNABLE_EXTENSIONS
     _SIGNATURE_AVAILABLE = True
@@ -51,7 +51,6 @@ def _parse_pe_sections(data: bytes) -> list[dict]:
             return sections
 
         # COFF header
-        machine          = struct.unpack_from("<H", data, pe_off + 4)[0]
         num_sections     = struct.unpack_from("<H", data, pe_off + 6)[0]
         opt_header_size  = struct.unpack_from("<H", data, pe_off + 20)[0]
         section_table_off = pe_off + 24 + opt_header_size
