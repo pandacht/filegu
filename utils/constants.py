@@ -16,31 +16,57 @@ FILE_C   = "#93C5FD"
 
 # ── Folders to skip during file traversal ─────────────────────────────────────
 DEFAULT_SKIP = {
-    # Windows system
+    # Windows system — always skip, system files are trusted
     "$Recycle.Bin", "System Volume Information", "Windows",
+    "WinSxS",           # Windows component store — thousands of DLLs
+    "servicing",        # Windows servicing
+    "assembly",         # .NET GAC
+    "Microsoft.NET",    # .NET runtime
     # macOS
     ".Spotlight-V100", ".Trashes", ".fseventsd",
     # Linux
     "proc", "sys", "dev",
     # Dev tools / package managers
     "node_modules", "__pycache__", ".git", ".svn", "venv", ".venv",
-    "chocolatey",                            # Chocolatey package manager scripts
-    ".p2",                                   # Eclipse plugin pool
+    "chocolatey", ".p2",
+    # Electron apps — all use packed asar/node — always high entropy
+    "discord", "Discord",
+    "slack", "Slack",
+    "VSCode", "Microsoft VS Code",
+    "code", "Code",
+    "WhatsApp",
+    "Telegram Desktop",
+    "zoom", "Zoom",
+    "Teams",
+    "Figma",
+    "Postman",
+    "Obsidian",
+    # Browsers — packed JS, high entropy
+    "Google", "Chrome",
+    "Microsoft", "Edge",
+    "Mozilla", "Firefox",
+    "BraveSoftware",
+    "Opera",
+    # IDEs / dev tools
+    "JetBrains",
+    "Android", "AndroidStudio",
+    "dotnet", ".dotnet",
+    "NuGet",
     # Game launchers & stores
     "SteamLibrary", "steamapps",
     "Ubisoft Game Launcher", "Ubisoft Connect",
     "Epic Games", "EpicGames",
     "GOG Galaxy", "GOG.com",
     "EA Games", "EA Desktop", "Origin",
-    "Rockstar Games",
-    "Battle.net",
+    "Rockstar Games", "Launcher",
+    "Battle.net", "Blizzard",
     "Xbox",
-    # Anti-cheat (always packed/obfuscated by design)
+    # Anti-cheat
     "BattlEye", "BattlEye Installer",
     "EasyAntiCheat", "EasyAntiCheat_EOS",
     "AntiCheat", "PunkBuster",
     "Vanguard", "GameGuard",
-    # Game engines / runtimes
+    # Game engines
     "PhyreEngine", "Unreal Engine", "Unity",
 }
 

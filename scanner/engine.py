@@ -65,6 +65,23 @@ def scan_file(path: str, skip_media: bool = True) -> dict:
         "summary": [], "size": 0,
     }
 
+    # ── Fast skip: known safe install paths ──────────────────────────────────
+    path_lower = path.lower()
+    TRUSTED_PATHS = (
+        "\\windows\\system32\\",
+        "\\windows\\syswow64\\",
+        "\\windows\\winsxs\\",
+        "\\microsoft.net\\",
+        "\\program files\\windowsapps\\",
+        "\\program files\\dotnet\\",
+        "\\program files\\nodejs\\",
+        "\\program files (x86)\\nodejs\\",
+    )
+    if any(tp in path_lower for tp in TRUSTED_PATHS):
+        base["verdict"] = "clean"
+        base["summary"] = ["Trusted system/runtime path"]
+        return base
+
     # ── Fast skip: data/media/game files ─────────────────────────────────────
     if ext in DATA_EXTENSIONS:
         base["verdict"] = "skipped"
@@ -172,7 +189,7 @@ def scan_file(path: str, skip_media: bool = True) -> dict:
     score = base["score"]
     if score >= 60:
         base["verdict"] = "malicious"
-    elif score >= 25:
+    elif score >= 40:
         base["verdict"] = "suspicious"
     else:
         base["verdict"] = "clean"

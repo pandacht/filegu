@@ -23,22 +23,56 @@ EXECUTABLE_EXTENSIONS = {
 
 # Extensions that are pure data — skip heuristic checks entirely
 DATA_EXTENSIONS = {
+    # Database / cache
     ".pak", ".dat", ".db", ".sqlite", ".sqlite3", ".bin",
     ".cache", ".blob", ".nib", ".lzma", ".xz",
+    # Images
     ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".ico",
+    ".tiff", ".raw", ".psd", ".ai", ".xcf", ".svg",
+    # Audio / video
     ".mp3", ".mp4", ".wav", ".flac", ".ogg", ".mkv",
-    ".ttf", ".otf", ".woff", ".woff2",
-    ".pdf", ".docx", ".xlsx", ".pptx",
-    ".pyc", ".pyo", ".class",
-    # Game assets — binary compressed data, always high entropy, never malicious
+    ".avi", ".mov", ".wmv", ".m4a", ".aac", ".opus",
+    # Fonts
+    ".ttf", ".otf", ".woff", ".woff2", ".eot",
+    # Documents
+    ".pdf", ".docx", ".xlsx", ".pptx", ".odt", ".ods",
+    # Compiled bytecode
+    ".pyc", ".pyo", ".class", ".elc", ".fasl",
+    # Game assets
     ".crp", ".unity3d", ".assetbundle", ".assets",
     ".uasset", ".umap", ".upk", ".rpf",
     ".bsa", ".ba2", ".vpk", ".wad", ".pk3", ".pk4",
     ".forge", ".big", ".arc", ".pac", ".res", ".bnk", ".xnb",
-    # Locale / translation files
-    ".mo", ".po",
+    # Locale / translation
+    ".mo", ".po", ".pot",
+    # Java / JVM
+    ".jar", ".war", ".ear",
+    # Old/backup
+    ".old", ".bak", ".backup", ".orig",
+    # Certificates / keys (data, not executable)
+    ".cer", ".crt", ".pem", ".key", ".p12", ".pfx", ".der",
+    # Archive formats (compressed data)
+    ".zip", ".tar", ".gz", ".7z", ".rar", ".cab", ".iso", ".img",
+    # Node.js / web compiled assets
+    ".map",           # source maps
+    ".wasm",          # WebAssembly — binary but not a PE
+    # Electron / Chromium app resources
+    ".asar",          # Electron app archive
+    # Compiled resources
+    ".res", ".rsrc",
+    # Database exports
+    ".sql", ".mdf", ".ldf",
+    # Config / data formats
+    ".ini", ".cfg", ".conf", ".log", ".toml",
+    # Windows metadata (not executable)
+    ".mui", ".mun",   # Windows resource DLLs (safe)
+    ".cat",           # Windows catalog
+    ".manifest",      # Assembly manifest
+    ".pdb",           # Debug symbols
+    ".lib", ".a",     # Static libraries (not executable)
+    ".obj", ".o",     # Object files
     # Windows API stub DLLs — always flagged, never malicious
-    "api-ms-win-",  # prefix match handled separately
+    "api-ms-win-",    # prefix match handled separately
 }
 
 # Known safe filenames — never flag these regardless of content
@@ -47,17 +81,43 @@ SAFE_FILENAMES = {
     "api-ms-win-core-memory-l1-1-0.dll",
     "api-ms-win-core-memory-l1-1-1.dll",
     "api-ms-win-core-memory-l1-1-2.dll",
-    # JVM debugging
+    # JVM debugging and runtime
     "attach.dll",
+    "jvm.dll",
+    "jvmti.dll",
+    "jvmdump.dll",
     # NVIDIA
     "nvpluginwatchdog.dll",
-    # Visual Studio debuggers
+    "nvngx_dlss.dll",
+    "nvngx.dll",
+    # Visual Studio / Python tools debuggers
     "microsoft.pythontools.attacher.exe",
+    "microsoft.pythontools.attacher64.exe",
+    "vsdbg.exe",
     # Unity
     "unityplayer.dll",
     "gameassembly.dll",
-    # NVIDIA DLSS
-    "nvngx_dlss.dll",
+    # Electron / Node
+    "node.exe",
+    "node_modules",
+    # Common Electron app host files
+    "electron.exe",
+    # Windows runtime stubs
+    "ucrtbase.dll",
+    "vcruntime140.dll",
+    "vcruntime140_1.dll",
+    "msvcp140.dll",
+    "msvcp140_1.dll",
+    "msvcp140_2.dll",
+    # .NET runtime
+    "clr.dll",
+    "coreclr.dll",
+    "clrjit.dll",
+    # Go compiled binaries are always high entropy — hard to distinguish
+    # but common safe go tools:
+    "gopls.exe",
+    "go.exe",
+    "gofmt.exe",
 }
 
 SCRIPT_EXTENSIONS = {".ps1", ".bat", ".cmd", ".vbs", ".js", ".hta", ".wsf"}
