@@ -145,8 +145,8 @@ def deep_scan_file(path: str) -> dict:
         "summary":         [],
     }
 
-    # ── Read file (cap at 10 MB for speed) ───────────────────────────────────
-    MAX_READ = 10 * 1024 * 1024  # 10 MB
+    # ── Read file (cap at 2 MB for speed) ────────────────────────────────────
+    MAX_READ = 2 * 1024 * 1024  # 2 MB
     try:
         size = Path(path).stat().st_size
         with open(path, "rb") as f:
