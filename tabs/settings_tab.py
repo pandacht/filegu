@@ -3,8 +3,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from utils.constants import (
-    ACCENT, ACCENT2, BG, SURFACE, SURFACE2, TEXT, MUTED,
-    SUCCESS, DANGER,
+    ACCENT, ACCENT2, BG, SURFACE, SURFACE2, TEXT, MUTED, SUCCESS
 )
 from utils import config as cfg
 from utils.lang import t, available_languages

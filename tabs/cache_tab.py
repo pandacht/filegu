@@ -8,7 +8,7 @@ from tkinter import messagebox
 from pathlib import Path
 
 from utils.constants import (
-    ACCENT, ACCENT2, BG, SURFACE, SURFACE2, TEXT, MUTED,
+    ACCENT2, BG, SURFACE, SURFACE2, TEXT, MUTED,
     SUCCESS, WARNING, DANGER,
 )
 from utils.lang import t

@@ -11,7 +11,6 @@
 #   NotTrusted    → signed but cert chain not trusted    → score: +30
 #   UnknownError  → couldn't verify                      → score: 0  (neutral)
 
-import os
 import sys
 import subprocess
 import json

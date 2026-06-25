@@ -12,7 +12,7 @@ from datetime import datetime
 
 from utils.constants import (
     ACCENT, ACCENT2, BG, SURFACE, SURFACE2, TEXT, MUTED,
-    SUCCESS, DANGER, FOLDER_C, FILE_C, DEFAULT_SKIP,
+    DANGER, FOLDER_C, FILE_C, DEFAULT_SKIP,
 )
 from utils.fs_helpers import fmt_size
 from utils.search_worker import run_search

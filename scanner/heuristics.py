@@ -3,8 +3,6 @@
 # Looks for suspicious patterns in file content, name, and location.
 # These are the same kinds of checks real AV engines use as a first pass.
 
-import os
-import re
 import struct
 from pathlib import Path
 

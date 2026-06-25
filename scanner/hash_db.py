@@ -5,7 +5,6 @@
 # The database can be updated at any time by downloading a fresh list.
 
 import hashlib
-import os
 import urllib.request
 import zipfile
 import io

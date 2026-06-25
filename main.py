@@ -6,10 +6,10 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
-from utils.constants import ACCENT, ACCENT2, BG, SURFACE, SURFACE2, TEXT, MUTED
+from utils.constants import ACCENT, BG, SURFACE, SURFACE2, TEXT, MUTED
 from utils.drives    import get_drives
 from utils           import config as cfg
-from utils.lang      import t, set_lang, available_languages
+from utils.lang      import t, set_lang
 from tabs.search_tab   import SearchTab
 from tabs.cache_tab    import CacheTab
 from tabs.virus_tab    import VirusTab
