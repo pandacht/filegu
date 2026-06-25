@@ -15,6 +15,7 @@ class SettingsTab(tk.Frame):
         super().__init__(parent, bg=BG)
         self._app  = app_ref
         self._vars = {}
+        self._placeholders = {}
         self._canvas = None
         self._build(self)
 
@@ -52,12 +53,6 @@ class SettingsTab(tk.Frame):
         self._row_spinbox(inner, t("settings.threads"),
                           t("settings.threads_desc"),
                           "scanner.threads", conf["scanner"]["threads"], from_=1, to=32)
-        self._row_radio(inner, t("settings.depth"),
-                        t("settings.depth_desc"),
-                        "scanner.depth", conf["scanner"]["depth"],
-                        [(t("settings.depth_full"), "full"),
-                         (t("settings.depth_3"), "3"),
-                         (t("settings.depth_1"), "1")])
         self._row_check(inner, t("settings.skip_media"),
                         t("settings.skip_media_desc"),
                         "scanner.skip_media", conf["scanner"]["skip_media"])
@@ -194,22 +189,41 @@ class SettingsTab(tk.Frame):
     def _row_tags(self, parent, label, desc, key, default):
         row = tk.Frame(parent, bg=SURFACE)
         row.pack(fill="x", padx=24, pady=2)
-        # Label on top
         hdr = tk.Frame(row, bg=SURFACE)
         hdr.pack(fill="x", padx=16, pady=(8, 2))
         tk.Label(hdr, text=label, font=("Segoe UI", 11),
                  bg=SURFACE, fg=TEXT).pack(side="left")
-        tk.Label(hdr, text=desc, font=("Segoe UI", 9),
-                 bg=SURFACE, fg=MUTED).pack(side="left", padx=(10, 0))
-        # Text box
         txt_frame = tk.Frame(row, bg=SURFACE2)
         txt_frame.pack(fill="x", padx=16, pady=(0, 8))
-        txt = tk.Text(txt_frame, font=("Consolas", 10), bg=SURFACE2, fg=TEXT,
+        txt = tk.Text(txt_frame, font=("Consolas", 10), bg=SURFACE2,
                       insertbackground=ACCENT, relief="flat", bd=6,
                       height=3, wrap="none")
         txt.pack(fill="x")
-        txt.insert("1.0", "\n".join(default))
-        self._vars[key] = txt
+
+        placeholder = desc
+
+        if default:
+            txt.insert("1.0", "\n".join(default))
+            txt.config(fg=TEXT)
+        else:
+            txt.insert("1.0", placeholder)
+            txt.config(fg=MUTED)
+
+        def on_focus_in(e):
+            if txt.get("1.0", "end-1c") == placeholder:
+                txt.delete("1.0", "end")
+                txt.config(fg=TEXT)
+
+        def on_focus_out(e):
+            if not txt.get("1.0", "end-1c").strip():
+                txt.insert("1.0", placeholder)
+                txt.config(fg=MUTED)
+
+        txt.bind("<FocusIn>",  on_focus_in)
+        txt.bind("<FocusOut>", on_focus_out)
+
+        self._vars[key]          = txt
+        self._placeholders[key]  = placeholder
 
     # ── Save / reset ──────────────────────────────────────────────────────────
     def _collect(self) -> dict:
@@ -219,7 +233,10 @@ class SettingsTab(tk.Frame):
             section = parts[0]
             field   = parts[1]
             if isinstance(var, tk.Text):
-                raw   = var.get("1.0", "end").strip()
+                raw = var.get("1.0", "end-1c").strip()
+                # Don't save placeholder text
+                if raw == self._placeholders.get(key, ""):
+                    raw = ""
                 items = [l.strip() for l in raw.splitlines() if l.strip()]
                 conf[section][field] = items
             elif isinstance(var, tk.BooleanVar):
